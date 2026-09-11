@@ -1,0 +1,7 @@
+{
+  "extends": "@meet/shared-config/tsconfig.base.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler"
+  },
+  "include": ["src/**/*"]
+}

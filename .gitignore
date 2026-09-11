@@ -1,47 +1,44 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Dependencies
 node_modules
+.pnp
+.pnp.js
 
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Testing
+coverage
 
-# testing
-/coverage
+# Next.js
+.next/
+out/
 
-# next.js
-.next
-
-dist
+# Production
 build
+dist
 
-
-/out/
-
-# production
-/build
-
-# misc
+# Misc
 .DS_Store
 *.pem
 
-# debug
+# Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+bun.lock*
 
-# env files (can opt-in for committing if needed)
-.env*
+# Local env files
+.env*.local
+.env
 
-# vercel
-.vercel
+# Turbo
+.turbo
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Mediasoup native builds
+build/Release/mediasoup-worker
+
+# IDE
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
