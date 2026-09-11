@@ -8,4 +8,6 @@ export * from "./whiteboards";
 export * from "./notifications";
 export * from "./files";
 export * from "./analytics";
+export * from "./templates";
 export * from "./relations";
+

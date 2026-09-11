@@ -6,6 +6,8 @@ import { PreJoinLobby } from "../lobby/pre-join-lobby";
 import { MeetingGrid } from "./meeting-grid";
 import { ControlBar } from "./control-bar";
 import { ChatPanel } from "../chat/chat-panel";
+import { HostControlsModal } from "../meetings/host-controls-modal";
+import { WaitingRoomManager } from "../meetings/waiting-room-manager";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { useMediaStore } from "../../stores/media-store";
 import { useMediasoup } from "../../hooks/use-mediasoup";
@@ -24,6 +26,7 @@ export function MeetingRoomClient({ slug }: { slug: string }) {
   const [displayName, setDisplayName] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
+  const [isHostControlsOpen, setIsHostControlsOpen] = useState(false);
 
   const { isChatOpen, reset: resetMeeting } = useMeetingStore();
   const { resetMedia } = useMediaStore();
@@ -74,12 +77,26 @@ export function MeetingRoomClient({ slug }: { slug: string }) {
         </div>
       )}
 
+      {/* Waiting Room Real-time Management */}
+      <WaitingRoomManager meetingId={slug} hostId="0191eb70-0000-7000-8000-000000000001" />
+
+      {/* Host Controls Modal */}
+      <HostControlsModal
+        meetingId={slug}
+        isOpen={isHostControlsOpen}
+        onClose={() => setIsHostControlsOpen(false)}
+      />
+
       <div className="flex-1 flex w-full h-full overflow-hidden">
         <MeetingGrid localDisplayName={displayName} />
         {isChatOpen && <ChatPanel onSendMessage={handleSendMessage} messages={messages} />}
       </div>
 
-      <ControlBar onLeave={handleLeave} onSendReaction={handleSendReaction} />
+      <ControlBar
+        onLeave={handleLeave}
+        onSendReaction={handleSendReaction}
+        onOpenHostControls={() => setIsHostControlsOpen(true)}
+      />
     </div>
   );
 }

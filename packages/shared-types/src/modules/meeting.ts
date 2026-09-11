@@ -47,3 +47,15 @@ export interface ParticipantDTO {
   connectionStatus: ParticipantConnectionStatus;
   joinedAt: string;
 }
+
+export interface MeetingTemplateDTO {
+  id: string;
+  userId?: string | null;
+  name: string;
+  description?: string | null;
+  isDefault: boolean;
+  settings: MeetingSettings;
+  createdAt: string;
+  updatedAt: string;
+}
+

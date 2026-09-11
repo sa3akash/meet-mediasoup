@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Users, PhoneOff } from "lucide-react";
+import { MessageSquare, Users, PhoneOff, ShieldAlert } from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { MediaButtons } from "./controls/media-buttons";
 import { ReactionsPicker } from "./controls/reactions-picker";
@@ -8,9 +8,11 @@ import { ReactionsPicker } from "./controls/reactions-picker";
 interface ControlBarProps {
   onLeave: () => void;
   onSendReaction?: (emoji: string) => void;
+  onOpenHostControls?: () => void;
 }
 
-export function ControlBar({ onLeave, onSendReaction }: ControlBarProps) {
+export function ControlBar({ onLeave, onSendReaction, onOpenHostControls }: ControlBarProps) {
+
   const {
     isChatOpen,
     toggleChat,
@@ -47,6 +49,16 @@ export function ControlBar({ onLeave, onSendReaction }: ControlBarProps) {
 
       {/* Right: Sidebars & Toggles */}
       <div className="flex items-center gap-2">
+        {onOpenHostControls && (
+          <button
+            onClick={onOpenHostControls}
+            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            title="Host Controls"
+          >
+            <ShieldAlert className="w-5 h-5" />
+          </button>
+        )}
+
         <button
           onClick={toggleParticipantsList}
           className={`p-3 rounded-xl transition-colors relative ${
@@ -73,3 +85,4 @@ export function ControlBar({ onLeave, onSendReaction }: ControlBarProps) {
     </div>
   );
 }
+
