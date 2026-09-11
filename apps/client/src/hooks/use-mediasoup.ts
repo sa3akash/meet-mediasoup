@@ -7,6 +7,8 @@ import { useMeetingStore } from "../stores/meeting-store";
 import { useMediaStore } from "../stores/media-store";
 import { useSignalingRpc } from "./mediasoup/use-signaling-rpc";
 import { useConsumerManager } from "./mediasoup/use-consumer-manager";
+import { getVideoEncodings } from "../services/webrtc/video-encodings";
+import { ConnectionRecoveryManager } from "../services/webrtc/connection-recovery";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/ws";
 
@@ -26,6 +28,7 @@ export function useMediasoup(meetingId: string, displayName: string, userId?: st
     if (!meetingId) return;
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
+    const recovery = new ConnectionRecoveryManager(sendRequest);
 
     ws.onopen = async () => {
       try {
@@ -41,6 +44,7 @@ export function useMediasoup(meetingId: string, displayName: string, userId?: st
         const sendParams = await sendRequest("webrtc:createWebRtcTransport", { direction: "send" });
         const sendTransport = device.createSendTransport(sendParams);
         sendTransportRef.current = sendTransport;
+        recovery.bindTransportIceRecovery(sendTransport);
 
         sendTransport.on("connect", async ({ dtlsParameters }, cb, err) => {
           try {
@@ -60,6 +64,7 @@ export function useMediasoup(meetingId: string, displayName: string, userId?: st
         const recvParams = await sendRequest("webrtc:createWebRtcTransport", { direction: "recv" });
         const recvTransport = device.createRecvTransport(recvParams);
         recvTransportRef.current = recvTransport;
+        recovery.bindTransportIceRecovery(recvTransport);
 
         recvTransport.on("connect", async ({ dtlsParameters }, cb, err) => {
           try {
@@ -68,7 +73,7 @@ export function useMediasoup(meetingId: string, displayName: string, userId?: st
           } catch (e: any) { err(e); }
         });
 
-        // 3. Produce Local Audio & Video
+        // 3. Produce Local Audio (DSP) & Video (Simulcast / SVC)
         if (localStream) {
           const audioTrack = localStream.getAudioTracks()[0];
           if (audioTrack) {
@@ -79,11 +84,7 @@ export function useMediasoup(meetingId: string, displayName: string, userId?: st
           if (videoTrack) {
             const vp = await sendTransport.produce({
               track: videoTrack,
-              encodings: [
-                { maxBitrate: 200000, scaleResolutionDownBy: 4 },
-                { maxBitrate: 800000, scaleResolutionDownBy: 2 },
-                { maxBitrate: 2500000, scaleResolutionDownBy: 1 },
-              ],
+              encodings: getVideoEncodings(),
               appData: { source: "webcam" },
             });
             producersRef.current.set("video", vp);
@@ -120,7 +121,10 @@ export function useMediasoup(meetingId: string, displayName: string, userId?: st
       }
     };
 
+    const cleanupDevice = recovery.setupDeviceHotplugRecovery(producersRef.current);
+
     return () => {
+      cleanupDevice();
       producersRef.current.forEach((p) => p.close());
       closeAllConsumers();
       sendTransportRef.current?.close();

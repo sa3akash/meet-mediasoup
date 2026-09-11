@@ -1,76 +1,81 @@
 import * as mediasoup from "mediasoup";
-import type { Worker, Router, AudioLevelObserver } from "mediasoup/node/lib/types";
+import type { Worker } from "mediasoup/node/lib/types";
 import { mediasoupConfig } from "./config";
+
+export interface WorkerMetric {
+  pid: number;
+  routersCount: number;
+  ru_utime?: number;
+  ru_stime?: number;
+  ru_maxrss?: number;
+}
 
 class WorkerPool {
   private workers: Worker[] = [];
-  private nextWorkerIdx = 0;
-  private routers = new Map<string, Router>();
-  private audioObservers = new Map<string, AudioLevelObserver>();
+  private workerRoutersCount = new Map<number, number>();
 
   public async initialize(): Promise<void> {
     const count = mediasoupConfig.numWorkers;
     console.log(`[Mediasoup] Initializing ${count} worker instances...`);
 
     for (let i = 0; i < count; i++) {
-      const worker = await mediasoup.createWorker(mediasoupConfig.workerSettings);
-
-      worker.on("died", (error) => {
-        console.error(`[Mediasoup] Worker ${worker.pid} died:`, error);
-        this.workers = this.workers.filter((w) => w.pid !== worker.pid);
-        // Spin up replacement worker
-        mediasoup.createWorker(mediasoupConfig.workerSettings).then((newWorker) => {
-          this.workers.push(newWorker);
-        });
-      });
-
-      this.workers.push(worker);
+      await this.spawnWorker();
     }
   }
 
-  public getNextWorker(): Worker {
-    if (this.workers.length === 0) {
-      throw new Error("No mediasoup workers available in pool");
-    }
-    const worker = this.workers[this.nextWorkerIdx];
-    this.nextWorkerIdx = (this.nextWorkerIdx + 1) % this.workers.length;
+  private async spawnWorker(): Promise<Worker> {
+    const worker = await mediasoup.createWorker(mediasoupConfig.workerSettings);
+    this.workers.push(worker);
+    this.workerRoutersCount.set(worker.pid, 0);
+
+    worker.on("died", (error) => {
+      console.error(`[Mediasoup] Worker ${worker.pid} died:`, error);
+      this.workers = this.workers.filter((w) => w.pid !== worker.pid);
+      this.workerRoutersCount.delete(worker.pid);
+      // Automatically respawn replacement worker
+      this.spawnWorker().catch((err) => console.error("Failed to respawn worker:", err));
+    });
+
     return worker;
   }
 
-  public async getOrCreateRouter(roomId: string): Promise<Router> {
-    let router = this.routers.get(roomId);
-    if (!router) {
-      const worker = this.getNextWorker();
-      router = await worker.createRouter({ mediaCodecs: mediasoupConfig.router.mediaCodecs });
-      this.routers.set(roomId, router);
-
-      // Create AudioLevelObserver for active speaker detection
-      const audioObserver = await router.createAudioLevelObserver({
-        maxEntries: 1,
-        threshold: -60, // dBov
-        interval: 400, // ms
-      });
-      this.audioObservers.set(roomId, audioObserver);
-
-      router.observer.on("close", () => {
-        this.routers.delete(roomId);
-        this.audioObservers.delete(roomId);
-      });
-    }
-    return router;
+  public getWorkers(): Worker[] {
+    return this.workers;
   }
 
-  public getAudioObserver(roomId: string): AudioLevelObserver | undefined {
-    return this.audioObservers.get(roomId);
+  public getRouterCount(pid: number): number {
+    return this.workerRoutersCount.get(pid) || 0;
   }
 
-  public closeRouter(roomId: string): void {
-    const router = this.routers.get(roomId);
-    if (router && !router.closed) {
-      router.close();
+  public incrementRouterCount(pid: number): void {
+    this.workerRoutersCount.set(pid, this.getRouterCount(pid) + 1);
+  }
+
+  public decrementRouterCount(pid: number): void {
+    const count = this.getRouterCount(pid);
+    if (count > 0) this.workerRoutersCount.set(pid, count - 1);
+  }
+
+  public async getWorkerMetrics(): Promise<WorkerMetric[]> {
+    const metrics: WorkerMetric[] = [];
+    for (const worker of this.workers) {
+      try {
+        const usage = await worker.getResourceUsage();
+        metrics.push({
+          pid: worker.pid,
+          routersCount: this.getRouterCount(worker.pid),
+          ru_utime: usage.ru_utime,
+          ru_stime: usage.ru_stime,
+          ru_maxrss: usage.ru_maxrss,
+        });
+      } catch {
+        metrics.push({
+          pid: worker.pid,
+          routersCount: this.getRouterCount(worker.pid),
+        });
+      }
     }
-    this.routers.delete(roomId);
-    this.audioObservers.delete(roomId);
+    return metrics;
   }
 }
 

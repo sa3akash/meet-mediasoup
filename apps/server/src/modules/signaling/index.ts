@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import { roomManager } from "../../infrastructure/mediasoup/room-manager";
-import { workerPool } from "../../infrastructure/mediasoup/worker-pool";
+import { audioObserverService } from "../../infrastructure/mediasoup/audio-observer-service";
 import { addRoomParticipant, removeRoomParticipant, setUserPresence } from "../../infrastructure/redis";
 import {
   type SocketData,
@@ -11,6 +11,14 @@ import {
   sendError,
 } from "./socket-registry";
 import { handleWebRtcMessage } from "./handlers/webrtc-handlers";
+
+// Listen to audioObserverService to broadcast active speaker changes
+audioObserverService.on("activeSpeaker", ({ roomId, producerId, volume }) => {
+  broadcastToRoom(roomId, {
+    event: "webrtc:activeSpeaker",
+    data: { producerId, volume },
+  });
+});
 
 export function handleSocketOpen(ws: ServerWebSocket<SocketData>) {}
 
@@ -51,18 +59,6 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         ws.data.displayName = displayName;
 
         registerSocket(meetingId, ws);
-
-        const observer = workerPool.getAudioObserver(meetingId);
-        if (observer) {
-          observer.on("volumes", (volumes) => {
-            if (volumes.length > 0) {
-              broadcastToRoom(meetingId, {
-                event: "webrtc:activeSpeaker",
-                data: { producerId: volumes[0].producer.id, volume: volumes[0].volume },
-              });
-            }
-          });
-        }
 
         await addRoomParticipant(meetingId, ws.data.participantId, {
           participantId: ws.data.participantId,

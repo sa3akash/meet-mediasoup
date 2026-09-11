@@ -2,10 +2,10 @@ import type { RtpCodecCapability, TransportListenInfo, WorkerSettings } from "me
 import os from "os";
 
 export const mediasoupConfig = {
-  numWorkers: Math.max(1, os.cpus().length),
+  numWorkers: Math.max(2, os.cpus().length),
   workerSettings: {
     logLevel: "warn",
-    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp"],
+    logTags: ["info", "ice", "dtls", "rtp", "srtp", "rtcp", "bwe"],
     rtcMinPort: Number(process.env.RTC_MIN_PORT || 40000),
     rtcMaxPort: Number(process.env.RTC_MAX_PORT || 49999),
   } satisfies WorkerSettings,
@@ -17,21 +17,24 @@ export const mediasoupConfig = {
         mimeType: "audio/opus",
         clockRate: 48000,
         channels: 2,
+        parameters: {
+          useinbandfec: 1,
+          usedtx: 1,
+          maxaveragebitrate: 64000,
+        },
       },
       {
         kind: "video",
         mimeType: "video/VP8",
         clockRate: 90000,
-        parameters: {
-          "x-google-start-bitrate": 1000,
-        },
+        parameters: { "x-google-start-bitrate": 1000 },
       },
       {
         kind: "video",
         mimeType: "video/VP9",
         clockRate: 90000,
         parameters: {
-          "profile-id": 2,
+          "profile-id": 0,
           "x-google-start-bitrate": 1000,
         },
       },
@@ -50,9 +53,7 @@ export const mediasoupConfig = {
         kind: "video",
         mimeType: "video/av1",
         clockRate: 90000,
-        parameters: {
-          "profile-id": 0,
-        },
+        parameters: { "profile-id": 0 },
       },
     ] as RtpCodecCapability[],
   },
@@ -79,6 +80,7 @@ export const mediasoupConfig = {
       },
     ] as TransportListenInfo[],
     initialAvailableOutgoingBitrate: 1000000,
+    maxIncomingBitrate: 3500000,
     maxSctpMessageSize: 262144,
   },
 } as const;

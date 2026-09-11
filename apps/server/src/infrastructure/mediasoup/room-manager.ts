@@ -1,10 +1,7 @@
-import type {
-  RtpCapabilities,
-  RtpParameters,
-  DtlsParameters,
-  MediaKind,
-} from "mediasoup/node/lib/types";
-import { workerPool } from "./worker-pool";
+import type { RtpCapabilities, RtpParameters, DtlsParameters, MediaKind, Consumer } from "mediasoup/node/lib/types";
+import { routerBalancer } from "./router-balancer";
+import { audioObserverService } from "./audio-observer-service";
+import { layerManager, type LayerOptions } from "./layer-manager";
 import { createPeerTransport, connectPeerTransport, restartPeerIce } from "./transport-service";
 import type { PeerMediaState } from "./types";
 
@@ -12,7 +9,8 @@ class MediasoupRoomManager {
   private rooms = new Map<string, Map<string, PeerMediaState>>();
 
   public async getRouterCapabilities(meetingId: string): Promise<RtpCapabilities> {
-    const router = await workerPool.getOrCreateRouter(meetingId);
+    const router = await routerBalancer.getOrCreateRouter(meetingId);
+    await audioObserverService.setupObserver(meetingId, router);
     return router.rtpCapabilities;
   }
 
@@ -56,8 +54,7 @@ class MediasoupRoomManager {
     peer.producers.set(producer.id, producer);
 
     if (kind === "audio") {
-      const observer = workerPool.getAudioObserver(meetingId);
-      if (observer) await observer.addProducer({ producerId: producer.id });
+      await audioObserverService.addAudioProducer(meetingId, producer);
     }
 
     producer.on("transportclose", () => peer.producers.delete(producer.id));
@@ -65,7 +62,7 @@ class MediasoupRoomManager {
   }
 
   public async consume(meetingId: string, consumerPeerId: string, producerId: string, rtpCapabilities: RtpCapabilities) {
-    const router = await workerPool.getOrCreateRouter(meetingId);
+    const router = await routerBalancer.getOrCreateRouter(meetingId);
     if (!router.canConsume({ producerId, rtpCapabilities })) {
       throw new Error(`Cannot consume producer ${producerId}`);
     }
@@ -92,6 +89,14 @@ class MediasoupRoomManager {
     };
   }
 
+  public async setConsumerLayers(meetingId: string, peerId: string, consumerId: string, options: LayerOptions) {
+    const peer = this.getOrCreatePeer(meetingId, peerId);
+    const consumer = peer.consumers.get(consumerId);
+    if (consumer) {
+      await layerManager.setPreferredLayers(consumer, options);
+    }
+  }
+
   public async restartIce(meetingId: string, peerId: string, transportId: string) {
     const peer = this.getOrCreatePeer(meetingId, peerId);
     return await restartPeerIce(peer, transportId);
@@ -109,7 +114,8 @@ class MediasoupRoomManager {
     }
     if (room.size === 0) {
       this.rooms.delete(meetingId);
-      workerPool.closeRouter(meetingId);
+      audioObserverService.removeObserver(meetingId);
+      routerBalancer.closeRouter(meetingId);
     }
   }
 

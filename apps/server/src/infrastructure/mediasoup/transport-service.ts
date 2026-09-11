@@ -1,5 +1,5 @@
-import type { WebRtcTransport, DtlsParameters } from "mediasoup/node/lib/types";
-import { workerPool } from "./worker-pool";
+import type { DtlsParameters } from "mediasoup/node/lib/types";
+import { routerBalancer } from "./router-balancer";
 import { mediasoupConfig } from "./config";
 import type { PeerMediaState } from "./types";
 
@@ -8,13 +8,14 @@ export async function createPeerTransport(
   peer: PeerMediaState,
   direction: "send" | "recv"
 ) {
-  const router = await workerPool.getOrCreateRouter(meetingId);
+  const router = await routerBalancer.getOrCreateRouter(meetingId);
   const transport = await router.createWebRtcTransport({
     listenInfos: mediasoupConfig.webRtcTransport.listenInfos,
     enableUdp: true,
     enableTcp: true,
     preferUdp: true,
     initialAvailableOutgoingBitrate: mediasoupConfig.webRtcTransport.initialAvailableOutgoingBitrate,
+    maxIncomingBitrate: mediasoupConfig.webRtcTransport.maxIncomingBitrate,
     appData: { peerId: peer.peerId, direction },
   });
 
