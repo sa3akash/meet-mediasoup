@@ -1,22 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Mic,
-  MicOff,
-  Video,
-  VideoOff,
-  ScreenShare,
-  Hand,
-  Smile,
-  MessageSquare,
-  Users,
-  PhoneOff,
-  MoreVertical,
-  LayoutGrid,
-} from "lucide-react";
-import { useMediaStore } from "../../stores/media-store";
+import { MessageSquare, Users, PhoneOff } from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
+import { MediaButtons } from "./controls/media-buttons";
+import { ReactionsPicker } from "./controls/reactions-picker";
 
 interface ControlBarProps {
   onLeave: () => void;
@@ -24,10 +11,7 @@ interface ControlBarProps {
 }
 
 export function ControlBar({ onLeave, onSendReaction }: ControlBarProps) {
-  const { isAudioMuted, isVideoMuted, isScreenSharing, toggleAudio, toggleVideo, setScreenSharing } = useMediaStore();
   const {
-    isHandRaised,
-    setHandRaised,
     isChatOpen,
     toggleChat,
     isParticipantsListOpen,
@@ -35,23 +19,6 @@ export function ControlBar({ onLeave, onSendReaction }: ControlBarProps) {
     participants,
     slug,
   } = useMeetingStore();
-
-  const [showReactions, setShowReactions] = useState(false);
-  const emojis = ["❤️", "👍", "🎉", "👏", "😂", "😮"];
-
-  const handleScreenShareToggle = async () => {
-    try {
-      if (isScreenSharing) {
-        setScreenSharing(false);
-      } else {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        setScreenSharing(true);
-        stream.getVideoTracks()[0].onended = () => setScreenSharing(false);
-      }
-    } catch (e) {
-      console.warn("Screen share cancelled or failed:", e);
-    }
-  };
 
   return (
     <div className="relative w-full h-20 bg-neutral-900/90 backdrop-blur-xl border-t border-white/10 px-6 flex items-center justify-between z-20">
@@ -64,85 +31,8 @@ export function ControlBar({ onLeave, onSendReaction }: ControlBarProps) {
 
       {/* Center: Main Call Controls */}
       <div className="flex items-center gap-3">
-        {/* Audio Mute */}
-        <button
-          onClick={toggleAudio}
-          className={`p-3.5 rounded-full transition-all duration-200 shadow-md ${
-            isAudioMuted
-              ? "bg-red-500 hover:bg-red-600 text-white"
-              : "bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10"
-          }`}
-          title={isAudioMuted ? "Turn on microphone (Ctrl+D)" : "Turn off microphone (Ctrl+D)"}
-        >
-          {isAudioMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-        </button>
-
-        {/* Video Mute */}
-        <button
-          onClick={toggleVideo}
-          className={`p-3.5 rounded-full transition-all duration-200 shadow-md ${
-            isVideoMuted
-              ? "bg-red-500 hover:bg-red-600 text-white"
-              : "bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10"
-          }`}
-          title={isVideoMuted ? "Turn on camera (Ctrl+E)" : "Turn off camera (Ctrl+E)"}
-        >
-          {isVideoMuted ? <VideoOff className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-        </button>
-
-        {/* Screen Share */}
-        <button
-          onClick={handleScreenShareToggle}
-          className={`p-3.5 rounded-full transition-all duration-200 shadow-md ${
-            isScreenSharing
-              ? "bg-blue-600 text-white"
-              : "bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10"
-          }`}
-          title="Share screen"
-        >
-          <ScreenShare className="w-5 h-5" />
-        </button>
-
-        {/* Raise Hand */}
-        <button
-          onClick={() => setHandRaised(!isHandRaised)}
-          className={`p-3.5 rounded-full transition-all duration-200 shadow-md ${
-            isHandRaised
-              ? "bg-amber-500 text-black font-semibold"
-              : "bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10"
-          }`}
-          title="Raise or lower hand"
-        >
-          <Hand className="w-5 h-5" />
-        </button>
-
-        {/* Reactions */}
-        <div className="relative">
-          <button
-            onClick={() => setShowReactions(!showReactions)}
-            className="p-3.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10 transition-all duration-200 shadow-md"
-            title="Send reaction"
-          >
-            <Smile className="w-5 h-5" />
-          </button>
-
-          {showReactions && (
-            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-neutral-800/95 backdrop-blur-md border border-white/10 rounded-full px-3 py-2 flex items-center gap-2 shadow-2xl animate-in fade-in zoom-in-90">
-              {emojis.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => {
-                    onSendReaction?.(emoji);
-                    setShowReactions(false);
-                  }}
-                  className="text-2xl hover:scale-125 transition-transform p-1"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <MediaButtons />
+        <ReactionsPicker onSelectEmoji={onSendReaction} />
 
         {/* End Call */}
         <button

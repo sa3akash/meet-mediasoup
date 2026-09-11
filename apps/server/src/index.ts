@@ -3,6 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { swagger } from "@elysiajs/swagger";
 import { authRoutes } from "./modules/auth";
 import { meetingRoutes } from "./modules/meetings";
+import { userRoutes } from "./modules/users";
 import { workerPool } from "./infrastructure/mediasoup/worker-pool";
 import {
   handleSocketOpen,
@@ -37,6 +38,7 @@ const app = new Elysia()
   // Mount Modular Domain Routes
   .use(authRoutes)
   .use(meetingRoutes)
+  .use(userRoutes)
   // Native WebSocket Signaling Endpoint
   .ws("/ws", {
     open(ws) {
