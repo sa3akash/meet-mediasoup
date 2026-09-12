@@ -1,6 +1,17 @@
-"use client";
-
-import { MessageSquare, Users, PhoneOff, ShieldAlert, Lock, Shapes, Radio } from "lucide-react";
+import {
+  MessageSquare,
+  Users,
+  PhoneOff,
+  ShieldAlert,
+  Lock,
+  Shapes,
+  Radio,
+  Tv,
+  Pencil,
+  UploadCloud,
+  Bell,
+  Disc,
+} from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { MediaButtons } from "./controls/media-buttons";
 import { ReactionsPicker } from "./controls/reactions-picker";
@@ -15,12 +26,17 @@ interface ControlBarProps {
   onToggleScreenShare?: () => void;
   onOpenScreenShareModal?: () => void;
   onOpenRecordingModal?: () => void;
+  onOpenLiveStreamingModal?: () => void;
+  onOpenWhiteboardModal?: () => void;
+  onOpenFileSharePanel?: () => void;
+  onOpenNotificationCenter?: () => void;
   onToggleHandRaise?: () => void;
   disableScreenShare?: boolean;
   disableReactions?: boolean;
   disableChat?: boolean;
   isLocked?: boolean;
   unreadMessagesCount?: number;
+  unreadNotificationsCount?: number;
 }
 
 export function ControlBar({
@@ -32,12 +48,17 @@ export function ControlBar({
   onToggleScreenShare,
   onOpenScreenShareModal,
   onOpenRecordingModal,
+  onOpenLiveStreamingModal,
+  onOpenWhiteboardModal,
+  onOpenFileSharePanel,
+  onOpenNotificationCenter,
   onToggleHandRaise,
   disableScreenShare,
   disableReactions,
   disableChat,
   isLocked,
   unreadMessagesCount = 0,
+  unreadNotificationsCount = 0,
 }: ControlBarProps) {
 
   const {
@@ -105,6 +126,51 @@ export function ControlBar({
           >
             <Radio className="w-5 h-5" />
             {isRecording && <span className="text-xs font-mono font-bold">REC</span>}
+          </button>
+        )}
+
+        {onOpenLiveStreamingModal && (
+          <button
+            onClick={onOpenLiveStreamingModal}
+            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors relative"
+            title="Live Streaming (YouTube, Facebook, RTMP)"
+          >
+            <Tv className="w-5 h-5" />
+          </button>
+        )}
+
+        {onOpenWhiteboardModal && (
+          <button
+            onClick={onOpenWhiteboardModal}
+            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            title="Collaborative Whiteboard"
+          >
+            <Pencil className="w-5 h-5 text-amber-400" />
+          </button>
+        )}
+
+        {onOpenFileSharePanel && (
+          <button
+            onClick={onOpenFileSharePanel}
+            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            title="Shared Files & Documents"
+          >
+            <UploadCloud className="w-5 h-5 text-blue-400" />
+          </button>
+        )}
+
+        {onOpenNotificationCenter && (
+          <button
+            onClick={onOpenNotificationCenter}
+            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors relative"
+            title="Notifications"
+          >
+            <Bell className="w-5 h-5 text-indigo-400" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-lg">
+                {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
+              </span>
+            )}
           </button>
         )}
 

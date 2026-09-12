@@ -31,6 +31,15 @@ interface MeetingState {
   recordingDuration: number;
   recordingDownloadUrl: string | null;
 
+  // Live Streaming state
+  isLiveStreaming: boolean;
+  liveStreamingDestinations: Array<{ id: string; platform: string; status: string }>;
+  isStreamingModalOpen: boolean;
+
+  // File Sharing & Whiteboard & Notification state
+  isFileShareOpen: boolean;
+  isNotificationCenterOpen: boolean;
+
   myParticipantId: string | null;
   myRole: string;
 
@@ -48,6 +57,9 @@ interface MeetingState {
   setLayoutMode: (mode: VideoLayout) => void;
   toggleChat: () => void;
   toggleWhiteboard: () => void;
+  toggleFileShare: () => void;
+  toggleStreamingModal: () => void;
+  toggleNotificationCenter: () => void;
   toggleParticipantsList: () => void;
   toggleActivities: () => void;
   setHandRaised: (raised: boolean) => void;
@@ -59,6 +71,7 @@ interface MeetingState {
   setRecordingState: (isRecording: boolean, type?: "CLOUD" | "LOCAL" | null) => void;
   setRecordingDuration: (duration: number) => void;
   setRecordingDownloadUrl: (url: string | null) => void;
+  setLiveStreamingState: (isStreaming: boolean, destinations?: Array<{ id: string; platform: string; status: string }>) => void;
   reset: () => void;
 }
 
@@ -88,6 +101,12 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   recordingType: null,
   recordingDuration: 0,
   recordingDownloadUrl: null,
+
+  isLiveStreaming: false,
+  liveStreamingDestinations: [],
+  isStreamingModalOpen: false,
+  isFileShareOpen: false,
+  isNotificationCenterOpen: false,
 
   setMeeting: ({ id, slug, title, isHost }) =>
     set({ meetingId: id, slug, title, isHost }),
@@ -150,6 +169,9 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setLayoutMode: (layoutMode) => set({ layoutMode }),
   toggleChat: () => set((s) => ({ isChatOpen: !s.isChatOpen })),
   toggleWhiteboard: () => set((s) => ({ isWhiteboardOpen: !s.isWhiteboardOpen })),
+  toggleFileShare: () => set((s) => ({ isFileShareOpen: !s.isFileShareOpen })),
+  toggleStreamingModal: () => set((s) => ({ isStreamingModalOpen: !s.isStreamingModalOpen })),
+  toggleNotificationCenter: () => set((s) => ({ isNotificationCenterOpen: !s.isNotificationCenterOpen })),
   toggleParticipantsList: () => set((s) => ({ isParticipantsListOpen: !s.isParticipantsListOpen })),
   toggleActivities: () => set((s) => ({ isActivitiesOpen: !s.isActivitiesOpen })),
   setHandRaised: (isHandRaised) => set({ isHandRaised }),
@@ -168,6 +190,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     set({ isRecording, recordingType: isRecording ? recordingType : null, recordingDuration: isRecording ? 0 : 0 }),
   setRecordingDuration: (recordingDuration) => set({ recordingDuration }),
   setRecordingDownloadUrl: (recordingDownloadUrl) => set({ recordingDownloadUrl }),
+  setLiveStreamingState: (isLiveStreaming, liveStreamingDestinations = []) =>
+    set({ isLiveStreaming, liveStreamingDestinations }),
 
   reset: () =>
     set({
@@ -185,6 +209,11 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       layoutMode: "GRID",
       isChatOpen: false,
       isWhiteboardOpen: false,
+      isFileShareOpen: false,
+      isStreamingModalOpen: false,
+      isNotificationCenterOpen: false,
+      isLiveStreaming: false,
+      liveStreamingDestinations: [],
       isParticipantsListOpen: false,
       isActivitiesOpen: false,
       isHandRaised: false,

@@ -5,6 +5,8 @@ import { authRoutes } from "./modules/auth";
 import { meetingRoutes } from "./modules/meetings";
 import { userRoutes } from "./modules/users";
 import { webrtcRoutes } from "./modules/webrtc";
+import { fileRoutes } from "./modules/files/file-routes";
+import { notificationRoutes } from "./modules/notifications/notification-routes";
 import { workerPool } from "./infrastructure/mediasoup/worker-pool";
 import { redis } from "./infrastructure/redis";
 import {
@@ -59,6 +61,8 @@ const app = new Elysia()
   .use(meetingRoutes)
   .use(userRoutes)
   .use(webrtcRoutes)
+  .use(fileRoutes)
+  .use(notificationRoutes)
   // Native WebSocket Signaling Endpoint
   .ws("/ws", {
     open(ws: any) {

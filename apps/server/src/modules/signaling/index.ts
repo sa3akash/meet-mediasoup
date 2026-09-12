@@ -25,6 +25,10 @@ import {
 import { handleWebRtcMessage } from "./handlers/webrtc-handlers";
 import { chatService, type ChatMessage } from "../chat/chat-service";
 import { recordingService } from "../recordings/recording-service";
+import { streamingService } from "../streaming/streaming-service";
+import { whiteboardService } from "../whiteboards/whiteboard-service";
+import { fileService } from "../files/file-service";
+import { notificationService } from "../notifications/notification-service";
 
 // Listen to audioObserverService to broadcast active speaker changes
 audioObserverService.on("activeSpeaker", ({ roomId, producerId, peerId, volume }) => {
@@ -867,6 +871,307 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         });
 
         sendResponse(ws, id, { success: true, ended: true });
+        break;
+      }
+
+      // ==========================================
+      // LIVE STREAMING
+      // ==========================================
+      case "streaming:start": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can start live streaming");
+          break;
+        }
+
+        const { platform = "CUSTOM_RTMP", destinationUrl, streamKey = "", destinations } = data;
+        let destList: any[] = [];
+
+        if (Array.isArray(destinations) && destinations.length > 0) {
+          destList = destinations.map((d: any) => ({
+            id: d.id || crypto.randomUUID(),
+            platform: (d.platform || "CUSTOM_RTMP").toUpperCase(),
+            rtmpUrl: d.rtmpUrl || d.destinationUrl,
+            streamKey: d.streamKey || "",
+          }));
+        } else {
+          let finalUrl = destinationUrl;
+          const pUpper = platform.toUpperCase();
+          if (pUpper.includes("YOUTUBE") && streamKey) {
+            finalUrl = "rtmp://a.rtmp.youtube.com/live2";
+          } else if (pUpper.includes("FACEBOOK") && streamKey) {
+            finalUrl = "rtmps://live-api-s.facebook.com:443/rtmp";
+          }
+
+          if (!finalUrl) {
+            sendError(ws, id, 400, "Destination URL or Stream Key is required");
+            break;
+          }
+
+          destList = [{
+            id: crypto.randomUUID(),
+            platform: pUpper.includes("YOUTUBE") ? "YOUTUBE" : pUpper.includes("FACEBOOK") ? "FACEBOOK" : "CUSTOM_RTMP",
+            rtmpUrl: finalUrl,
+            streamKey,
+          }];
+        }
+
+        try {
+          const results = await streamingService.startStreaming(ws.data.meetingId, destList);
+
+          broadcastToRoom(ws.data.meetingId, {
+            event: "streaming:started",
+            data: { streams: results, meetingId: ws.data.meetingId },
+          });
+
+          sendResponse(ws, id, { success: true, streams: results });
+        } catch (e: any) {
+          sendError(ws, id, 500, e.message || "Failed to start streaming");
+        }
+        break;
+      }
+
+      case "streaming:stop": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can stop live streaming");
+          break;
+        }
+
+        const { destinationId, streamId } = data;
+        const stopped = await streamingService.stopStreaming(ws.data.meetingId, destinationId || streamId);
+        broadcastToRoom(ws.data.meetingId, {
+          event: "streaming:stopped",
+          data: { streamId: destinationId || streamId, meetingId: ws.data.meetingId },
+        });
+
+        sendResponse(ws, id, { success: true, stopped });
+        break;
+      }
+
+      case "streaming:status":
+      case "streaming:list": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const status = streamingService.getStreamStatus(ws.data.meetingId);
+        sendResponse(ws, id, { success: true, ...status });
+        break;
+      }
+
+      // ==========================================
+      // WHITEBOARD
+      // ==========================================
+      case "whiteboard:addElement":
+      case "whiteboard:draw": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const { element } = data;
+        if (!element || !element.id) {
+          sendError(ws, id, 400, "Invalid whiteboard element");
+          break;
+        }
+
+        element.createdBy = ws.data.participantId;
+        element.createdByName = ws.data.displayName;
+        element.createdAt = element.createdAt || new Date().toISOString();
+        element.updatedAt = new Date().toISOString();
+
+        await whiteboardService.addObject(ws.data.meetingId, element);
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "whiteboard:elementAdded",
+          data: { element, senderId: ws.data.participantId },
+        }, ws);
+
+        sendResponse(ws, id, { success: true, element });
+        break;
+      }
+
+      case "whiteboard:updateElement": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const { elementId, updates } = data;
+        if (!elementId || !updates) {
+          sendError(ws, id, 400, "Missing elementId or updates");
+          break;
+        }
+
+        const updated = await whiteboardService.updateObject(ws.data.meetingId, elementId, updates);
+        if (updated) {
+          broadcastToRoom(ws.data.meetingId, {
+            event: "whiteboard:elementUpdated",
+            data: { element: updated, senderId: ws.data.participantId },
+          }, ws);
+        }
+
+        sendResponse(ws, id, { success: true, element: updated });
+        break;
+      }
+
+      case "whiteboard:clear": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        await whiteboardService.clearBoard(ws.data.meetingId);
+        broadcastToRoom(ws.data.meetingId, {
+          event: "whiteboard:cleared",
+          data: { senderId: ws.data.participantId },
+        });
+
+        sendResponse(ws, id, { success: true });
+        break;
+      }
+
+      case "whiteboard:state": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const elements = await whiteboardService.getState(ws.data.meetingId);
+        sendResponse(ws, id, { success: true, elements });
+        break;
+      }
+
+      // ==========================================
+      // FILE SHARING
+      // ==========================================
+      case "file:upload": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const { fileName, mimeType, base64Data } = data;
+        if (!fileName || !base64Data) {
+          sendError(ws, id, 400, "Missing file data or file name");
+          break;
+        }
+
+        const buffer = Buffer.from(base64Data, "base64");
+        const file = await fileService.uploadFile({
+          meetingId: ws.data.meetingId,
+          uploaderId: ws.data.userId || ws.data.participantId || "anonymous",
+          uploaderName: ws.data.displayName || "Participant",
+          fileName,
+          mimeType: mimeType || "application/octet-stream",
+          fileBuffer: buffer,
+        });
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "file:uploaded",
+          data: { file },
+        });
+
+        sendResponse(ws, id, { success: true, file });
+        break;
+      }
+
+      case "file:list": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const files = await fileService.getMeetingFiles(ws.data.meetingId);
+        sendResponse(ws, id, { success: true, files });
+        break;
+      }
+
+      case "file:delete": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const { fileId } = data;
+        const success = await fileService.deleteFile(ws.data.meetingId, fileId);
+        if (success) {
+          broadcastToRoom(ws.data.meetingId, {
+            event: "file:deleted",
+            data: { fileId },
+          });
+        }
+
+        sendResponse(ws, id, { success });
+        break;
+      }
+
+      // ==========================================
+      // NOTIFICATIONS
+      // ==========================================
+      case "notification:send": {
+        const { targetUserId, userEmail, type, title, message, body: bodyText, channels, metadata } = data;
+        const text = message || bodyText;
+        if (!targetUserId || !type || !title || !text) {
+          sendError(ws, id, 400, "Missing required notification fields");
+          break;
+        }
+
+        const notification = await notificationService.sendNotification({
+          userId: targetUserId,
+          userEmail,
+          type,
+          title,
+          body: text,
+          data: metadata,
+          channels,
+        });
+
+        for (const [pid, socket] of participantSockets.entries()) {
+          if (socket.data.userId === targetUserId && socket.readyState === 1) {
+            sendToParticipant(pid, {
+              event: "notification:received",
+              data: { notification },
+            });
+          }
+        }
+
+        sendResponse(ws, id, { success: true, notification });
+        break;
+      }
+
+      case "notification:list": {
+        const targetUser = data.userId || ws.data.userId;
+        if (!targetUser) {
+          sendError(ws, id, 400, "Missing userId");
+          break;
+        }
+
+        const notifications = await notificationService.listNotifications(targetUser);
+        sendResponse(ws, id, { success: true, notifications });
+        break;
+      }
+
+      case "notification:markRead": {
+        const targetUser = data.userId || ws.data.userId;
+        const { notificationId } = data;
+        if (!targetUser || !notificationId) {
+          sendError(ws, id, 400, "Missing userId or notificationId");
+          break;
+        }
+
+        const success = await notificationService.markAsRead(targetUser, notificationId);
+        sendResponse(ws, id, { success });
         break;
       }
 

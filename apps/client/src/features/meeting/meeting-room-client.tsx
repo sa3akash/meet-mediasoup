@@ -17,6 +17,10 @@ import { HostControlsModal } from "../meetings/host-controls-modal";
 import { WaitingRoomManager } from "../meetings/waiting-room-manager";
 import { RecordingModal } from "../recording/recording-modal";
 import { LocalRecorder } from "../recording/local-recorder";
+import { LiveStreamingModal } from "../streaming/live-streaming-modal";
+import { WhiteboardModal, type WhiteboardElement } from "../whiteboard/whiteboard-modal";
+import { FilesPanel } from "../files/files-panel";
+import { NotificationCenter, type NotificationItem } from "../notifications/notification-center";
 import {
   BreakoutStateEvent,
   MediaForcedEvent,
@@ -86,6 +90,15 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
   const {
     isChatOpen,
     toggleChat,
+    isWhiteboardOpen,
+    toggleWhiteboard,
+    isFileShareOpen,
+    toggleFileShare,
+    isStreamingModalOpen,
+    toggleStreamingModal,
+    isNotificationCenterOpen,
+    toggleNotificationCenter,
+    isLiveStreaming,
     isParticipantsListOpen,
     isHandRaised,
     setHandRaised,
@@ -102,6 +115,11 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     setChatUserMuted,
   } = useMeetingStore();
   const { resetMedia } = useMediaStore();
+
+  const [whiteboardElements, setWhiteboardElements] = useState<WhiteboardElement[]>([]);
+  const [remoteFiles, setRemoteFiles] = useState<any[]>([]);
+  const [latestNotification, setLatestNotification] = useState<NotificationItem | null>(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
   const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
   const [localDuration, setLocalDuration] = useState(0);
@@ -244,6 +262,19 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     exportMeetingChat,
     startCloudRecording,
     stopCloudRecording,
+    startLiveStream,
+    stopLiveStream,
+    getLiveStreamStatus,
+    sendWhiteboardElement,
+    sendWhiteboardUpdate,
+    sendWhiteboardClear,
+    fetchWhiteboardState,
+    uploadSharedFile,
+    fetchSharedFiles,
+    deleteSharedFile,
+    sendNotificationRpc,
+    fetchNotifications,
+    markNotificationRead,
   } = useMediasoup(
     hasJoined ? slug : "",
     displayName,
@@ -296,6 +327,38 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         setRecordingState(false, null);
         if (data?.mp4Url) {
           setRecordingDownloadUrl(data.mp4Url);
+        }
+      },
+      onWhiteboardElementAdded: (data: any) => {
+        if (data?.element) {
+          setWhiteboardElements((prev) => [...prev, data.element]);
+        }
+      },
+      onWhiteboardElementUpdated: (data: any) => {
+        if (data?.element) {
+          setWhiteboardElements((prev) =>
+            prev.map((el) => (el.id === data.element.id ? data.element : el))
+          );
+        }
+      },
+      onWhiteboardCleared: () => {
+        setWhiteboardElements([]);
+      },
+      onFileUploaded: (data: any) => {
+        if (data?.file) {
+          setRemoteFiles((prev) => [data.file, ...prev]);
+        }
+      },
+      onFileDeleted: (data: any) => {
+        if (data?.fileId) {
+          setRemoteFiles((prev) => prev.filter((f) => f.id !== data.fileId));
+        }
+      },
+      onNotificationReceived: (data: any) => {
+        if (data?.notification) {
+          setLatestNotification(data.notification);
+          setUnreadNotificationsCount((c) => c + 1);
+          playMessageChime();
         }
       },
     },
@@ -767,6 +830,50 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         </div>
       )}
 
+      {/* Live Streaming Configuration & Control Modal */}
+      <LiveStreamingModal
+        isOpen={isStreamingModalOpen}
+        onClose={toggleStreamingModal}
+        onStartStreaming={async ({ destinations }) => {
+          await startLiveStream({ destinations });
+        }}
+        onStopStreaming={async (destinationId) => {
+          await stopLiveStream(destinationId);
+        }}
+      />
+
+      {/* Collaborative Whiteboard Modal */}
+      <WhiteboardModal
+        isOpen={isWhiteboardOpen}
+        onClose={toggleWhiteboard}
+        onAddElement={sendWhiteboardElement}
+        onUpdateElement={sendWhiteboardUpdate}
+        onClearBoard={sendWhiteboardClear}
+        onFetchState={fetchWhiteboardState}
+        remoteElements={whiteboardElements}
+      />
+
+      {/* Shared Files & Drag-Drop Panel */}
+      <FilesPanel
+        meetingId={slug}
+        isOpen={isFileShareOpen}
+        onClose={toggleFileShare}
+        onUploadFile={uploadSharedFile}
+        onFetchFiles={fetchSharedFiles}
+        onDeleteFile={deleteSharedFile}
+        remoteFiles={remoteFiles}
+      />
+
+      {/* Notification Center */}
+      <NotificationCenter
+        userId={currentUser?.id}
+        isOpen={isNotificationCenterOpen}
+        onClose={toggleNotificationCenter}
+        onFetchNotifications={() => fetchNotifications(currentUser?.id)}
+        onMarkRead={markNotificationRead}
+        remoteNotification={latestNotification}
+      />
+
       {/* Recording Setup & Controller Modal */}
       <RecordingModal
         isOpen={isRecordingModalOpen}
@@ -793,12 +900,20 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
           }
         }}
         onOpenRecordingModal={() => setIsRecordingModalOpen(true)}
+        onOpenLiveStreamingModal={toggleStreamingModal}
+        onOpenWhiteboardModal={toggleWhiteboard}
+        onOpenFileSharePanel={toggleFileShare}
+        onOpenNotificationCenter={() => {
+          toggleNotificationCenter();
+          setUnreadNotificationsCount(0);
+        }}
         onToggleHandRaise={handleToggleHandRaise}
         disableScreenShare={!isHost && meetingSettings.disableScreenShare}
         disableReactions={!isHost && meetingSettings.disableReactions}
         disableChat={!isHost && meetingSettings.disableChat}
         isLocked={meetingSettings.lockMeeting}
         unreadMessagesCount={unreadMessagesCount}
+        unreadNotificationsCount={unreadNotificationsCount}
       />
     </div>
   );

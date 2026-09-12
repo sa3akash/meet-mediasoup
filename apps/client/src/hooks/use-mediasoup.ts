@@ -81,6 +81,14 @@ interface UseMediasoupCallbacks {
   onChatUserMuted?: (data: { targetParticipantId: string; muted: boolean; by: string }) => void;
   onRecordingStarted?: (data: { recordingId: string; startedAt: string; recordType: string; by: string }) => void;
   onRecordingStopped?: (data: any) => void;
+  onLiveStreamingStarted?: (data: any) => void;
+  onLiveStreamingStopped?: (data: any) => void;
+  onWhiteboardElementAdded?: (data: any) => void;
+  onWhiteboardElementUpdated?: (data: any) => void;
+  onWhiteboardCleared?: () => void;
+  onFileUploaded?: (data: any) => void;
+  onFileDeleted?: (data: any) => void;
+  onNotificationReceived?: (data: any) => void;
 }
 
 export function useMediasoup(
@@ -140,6 +148,22 @@ export function useMediasoup(
   onRecordingStartedRef.current = callbacks?.onRecordingStarted;
   const onRecordingStoppedRef = useRef(callbacks?.onRecordingStopped);
   onRecordingStoppedRef.current = callbacks?.onRecordingStopped;
+  const onLiveStreamingStartedRef = useRef(callbacks?.onLiveStreamingStarted);
+  onLiveStreamingStartedRef.current = callbacks?.onLiveStreamingStarted;
+  const onLiveStreamingStoppedRef = useRef(callbacks?.onLiveStreamingStopped);
+  onLiveStreamingStoppedRef.current = callbacks?.onLiveStreamingStopped;
+  const onWhiteboardElementAddedRef = useRef(callbacks?.onWhiteboardElementAdded);
+  onWhiteboardElementAddedRef.current = callbacks?.onWhiteboardElementAdded;
+  const onWhiteboardElementUpdatedRef = useRef(callbacks?.onWhiteboardElementUpdated);
+  onWhiteboardElementUpdatedRef.current = callbacks?.onWhiteboardElementUpdated;
+  const onWhiteboardClearedRef = useRef(callbacks?.onWhiteboardCleared);
+  onWhiteboardClearedRef.current = callbacks?.onWhiteboardCleared;
+  const onFileUploadedRef = useRef(callbacks?.onFileUploaded);
+  onFileUploadedRef.current = callbacks?.onFileUploaded;
+  const onFileDeletedRef = useRef(callbacks?.onFileDeleted);
+  onFileDeletedRef.current = callbacks?.onFileDeleted;
+  const onNotificationReceivedRef = useRef(callbacks?.onNotificationReceived);
+  onNotificationReceivedRef.current = callbacks?.onNotificationReceived;
 
   const { localStream, removeRemoteStream, setRemoteStream } = useMediaStore();
   const localStreamRef = useRef<MediaStream | null>(localStream);
@@ -867,6 +891,64 @@ export function useMediasoup(
           }
           break;
         }
+
+        case "streaming:started": {
+          useMeetingStore.getState().setLiveStreamingState(true, msg.data?.streams || []);
+          if (onLiveStreamingStartedRef.current) {
+            onLiveStreamingStartedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "streaming:stopped": {
+          useMeetingStore.getState().setLiveStreamingState(false, []);
+          if (onLiveStreamingStoppedRef.current) {
+            onLiveStreamingStoppedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "whiteboard:elementAdded": {
+          if (onWhiteboardElementAddedRef.current) {
+            onWhiteboardElementAddedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "whiteboard:elementUpdated": {
+          if (onWhiteboardElementUpdatedRef.current) {
+            onWhiteboardElementUpdatedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "whiteboard:cleared": {
+          if (onWhiteboardClearedRef.current) {
+            onWhiteboardClearedRef.current();
+          }
+          break;
+        }
+
+        case "file:uploaded": {
+          if (onFileUploadedRef.current) {
+            onFileUploadedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "file:deleted": {
+          if (onFileDeletedRef.current) {
+            onFileDeletedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "notification:received": {
+          if (onNotificationReceivedRef.current) {
+            onNotificationReceivedRef.current(msg.data);
+          }
+          break;
+        }
       }
     };
 
@@ -1032,6 +1114,89 @@ export function useMediasoup(
     return sendRequest("recording:stop", {});
   }, [sendRequest]);
 
+  // LIVE STREAMING RPCs
+  const startLiveStream = useCallback(
+    async (params: { platform?: string; destinationUrl?: string; streamKey?: string; destinations?: any[] }) => {
+      return sendRequest("streaming:start", params);
+    },
+    [sendRequest]
+  );
+
+  const stopLiveStream = useCallback(
+    async (destinationId?: string) => {
+      return sendRequest("streaming:stop", { destinationId, streamId: destinationId });
+    },
+    [sendRequest]
+  );
+
+  const getLiveStreamStatus = useCallback(async () => {
+    return sendRequest("streaming:status", {});
+  }, [sendRequest]);
+
+  // WHITEBOARD RPCs
+  const sendWhiteboardElement = useCallback(
+    async (element: any) => {
+      return sendRequest("whiteboard:addElement", { element });
+    },
+    [sendRequest]
+  );
+
+  const sendWhiteboardUpdate = useCallback(
+    async (elementId: string, updates: any) => {
+      return sendRequest("whiteboard:updateElement", { elementId, updates });
+    },
+    [sendRequest]
+  );
+
+  const sendWhiteboardClear = useCallback(async () => {
+    return sendRequest("whiteboard:clear", {});
+  }, [sendRequest]);
+
+  const fetchWhiteboardState = useCallback(async () => {
+    return sendRequest("whiteboard:state", {});
+  }, [sendRequest]);
+
+  // FILE SHARING RPCs
+  const uploadSharedFile = useCallback(
+    async (fileName: string, mimeType: string, base64Data: string) => {
+      return sendRequest("file:upload", { fileName, mimeType, base64Data });
+    },
+    [sendRequest]
+  );
+
+  const fetchSharedFiles = useCallback(async () => {
+    return sendRequest("file:list", {});
+  }, [sendRequest]);
+
+  const deleteSharedFile = useCallback(
+    async (fileId: string) => {
+      return sendRequest("file:delete", { fileId });
+    },
+    [sendRequest]
+  );
+
+  // NOTIFICATION RPCs
+  const sendNotificationRpc = useCallback(
+    async (notificationData: any) => {
+      return sendRequest("notification:send", notificationData);
+    },
+    [sendRequest]
+  );
+
+  const fetchNotifications = useCallback(
+    async (targetUserId?: string) => {
+      return sendRequest("notification:list", { userId: targetUserId });
+    },
+    [sendRequest]
+  );
+
+  const markNotificationRead = useCallback(
+    async (notificationId: string) => {
+      return sendRequest("notification:markRead", { notificationId });
+    },
+    [sendRequest]
+  );
+
   return {
     sendRequest,
     toggleAudio,
@@ -1061,5 +1226,18 @@ export function useMediasoup(
     exportMeetingChat,
     startCloudRecording,
     stopCloudRecording,
+    startLiveStream,
+    stopLiveStream,
+    getLiveStreamStatus,
+    sendWhiteboardElement,
+    sendWhiteboardUpdate,
+    sendWhiteboardClear,
+    fetchWhiteboardState,
+    uploadSharedFile,
+    fetchSharedFiles,
+    deleteSharedFile,
+    sendNotificationRpc,
+    fetchNotifications,
+    markNotificationRead,
   };
 }
