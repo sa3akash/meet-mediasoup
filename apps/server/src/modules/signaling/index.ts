@@ -114,7 +114,7 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
       }
 
       case "participant:updateMediaState": {
-        const { isAudioMuted, isVideoMuted, isScreenSharing, isHandRaised } = data;
+        const { isAudioMuted, isVideoMuted, isScreenSharing, isHandRaised, screenTrackId, screenStreamId } = data;
         if (ws.data.meetingId && ws.data.participantId) {
           const allParticipants = await getRoomParticipants(ws.data.meetingId);
           const current = allParticipants.find(
@@ -130,6 +130,8 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
             ...(isVideoMuted !== undefined && { isVideoMuted }),
             ...(isScreenSharing !== undefined && { isScreenSharing }),
             ...(isHandRaised !== undefined && { isHandRaised }),
+            ...(screenTrackId !== undefined && { screenTrackId }),
+            ...(screenStreamId !== undefined && { screenStreamId }),
           };
           await addRoomParticipant(ws.data.meetingId, ws.data.participantId, updatedRecord);
 
@@ -142,6 +144,8 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
               isVideoMuted: updatedRecord.isVideoMuted,
               isScreenSharing: updatedRecord.isScreenSharing,
               isHandRaised: updatedRecord.isHandRaised,
+              screenTrackId,
+              screenStreamId,
             },
           }, ws);
         }

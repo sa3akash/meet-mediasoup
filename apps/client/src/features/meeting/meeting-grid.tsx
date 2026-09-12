@@ -37,11 +37,27 @@ function PresentationStage({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(() => {});
-    }
+    const video = videoRef.current;
+    if (!video || !stream) return;
+    video.srcObject = stream;
+    video.play().catch(() => {});
+
+    const onAddTrack = () => {
+      video.srcObject = stream;
+      video.play().catch(() => {});
+    };
+
+    stream.addEventListener("addtrack", onAddTrack);
+    return () => {
+      stream.removeEventListener("addtrack", onAddTrack);
+    };
   }, [stream]);
+
+  const hasLiveTrack = Boolean(
+    stream &&
+    stream.getVideoTracks().length > 0 &&
+    stream.getVideoTracks().some((t) => t.readyState === "live")
+  );
 
   return (
     <div className="relative w-full h-full rounded-2xl overflow-hidden bg-black/95 border border-white/10 shadow-2xl flex items-center justify-center">
@@ -50,8 +66,17 @@ function PresentationStage({
         autoPlay
         playsInline
         muted={true}
+        onLoadedMetadata={() => videoRef.current?.play().catch(() => {})}
         className="w-full h-full object-contain"
       />
+      {!hasLiveTrack && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white/50 text-xs gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center animate-pulse">
+            <ScreenShare className="w-6 h-6" />
+          </div>
+          <span>Receiving screen share...</span>
+        </div>
+      )}
       <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-md px-3.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-2 text-white text-xs font-semibold shadow-lg">
         <ScreenShare className="w-4 h-4 text-blue-400" />
         <span>{isLocal ? "You are presenting" : `${displayName} is presenting`}</span>
