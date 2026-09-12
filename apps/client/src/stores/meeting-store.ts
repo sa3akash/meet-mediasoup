@@ -10,6 +10,7 @@ interface MeetingState {
   isHost: boolean;
   participants: Map<string, ParticipantDTO>;
   activeSpeakerId: string | null;
+  speakingParticipants: Map<string, number>; // participantId -> volume (0-100)
   pinnedParticipantId: string | null;
   spotlightParticipantId: string | null;
   activePresenterId: string | null; // Multi-screenshare active presentation ID (or 'local')
@@ -49,6 +50,7 @@ interface MeetingState {
   removeParticipant: (participantId: string) => void;
   updateParticipant: (participantId: string, updates: any) => void;
   setActiveSpeaker: (id: string | null) => void;
+  setParticipantSpeaking: (participantId: string, isSpeaking: boolean, volume?: number) => void;
   setPinnedParticipant: (id: string | null) => void;
   setSpotlightParticipant: (id: string | null) => void;
   setActivePresenterId: (id: string | null) => void;
@@ -84,6 +86,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   myParticipantId: null,
   myRole: "PARTICIPANT",
   activeSpeakerId: null,
+  speakingParticipants: new Map(),
   pinnedParticipantId: null,
   spotlightParticipantId: null,
   activePresenterId: null,
@@ -140,9 +143,12 @@ export const useMeetingStore = create<MeetingState>((set) => ({
     set((state) => {
       const next = new Map(state.participants);
       next.delete(participantId);
+      const nextSpeaking = new Map(state.speakingParticipants);
+      nextSpeaking.delete(participantId);
       return {
         participants: next,
-        activeSpeakerId: state.activeSpeakerId === participantId ? null : state.activeSpeakerId,
+        speakingParticipants: nextSpeaking,
+        activeSpeakerId: state.activeSpeakerId === participantId ? (nextSpeaking.size > 0 ? Array.from(nextSpeaking.keys())[0] : null) : state.activeSpeakerId,
         pinnedParticipantId: state.pinnedParticipantId === participantId ? null : state.pinnedParticipantId,
         activePresenterId: state.activePresenterId === participantId ? null : state.activePresenterId,
       };
@@ -155,12 +161,33 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       const existing = next.get(participantId);
       if (existing) {
         next.set(participantId, { ...existing, ...updates });
-        return { participants: next };
+        let nextSpeaking = state.speakingParticipants;
+        if (updates.isAudioMuted === true && state.speakingParticipants.has(participantId)) {
+          nextSpeaking = new Map(state.speakingParticipants);
+          nextSpeaking.delete(participantId);
+        }
+        return { participants: next, speakingParticipants: nextSpeaking };
       }
       return state;
     }),
 
   setActiveSpeaker: (activeSpeakerId) => set({ activeSpeakerId }),
+  setParticipantSpeaking: (participantId, isSpeaking, volume = 100) =>
+    set((state) => {
+      const next = new Map(state.speakingParticipants);
+      if (isSpeaking) {
+        next.set(participantId, volume);
+      } else {
+        next.delete(participantId);
+      }
+      let nextActiveSpeakerId = state.activeSpeakerId;
+      if (isSpeaking) {
+        nextActiveSpeakerId = participantId;
+      } else if (state.activeSpeakerId === participantId) {
+        nextActiveSpeakerId = next.size > 0 ? Array.from(next.keys())[0] : null;
+      }
+      return { speakingParticipants: next, activeSpeakerId: nextActiveSpeakerId };
+    }),
   setPinnedParticipant: (pinnedParticipantId) => set({ pinnedParticipantId }),
   setSpotlightParticipant: (spotlightParticipantId) => set({ spotlightParticipantId }),
   setActivePresenterId: (activePresenterId) => set({ activePresenterId }),
@@ -202,6 +229,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       myRole: "PARTICIPANT",
       participants: new Map(),
       activeSpeakerId: null,
+      speakingParticipants: new Map(),
       pinnedParticipantId: null,
       spotlightParticipantId: null,
       activePresenterId: null,

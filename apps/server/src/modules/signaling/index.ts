@@ -586,11 +586,11 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         broadcastToRoom(ws.data.meetingId, {
           event: "webrtc:activeSpeaker",
           data: {
-            peerId: isSpeaking ? ws.data.participantId : null,
-            producerId: null,
+            peerId: ws.data.participantId,
+            isSpeaking: !!isSpeaking,
             volume: isSpeaking ? volume : 0,
           },
-        });
+        }, ws);
         if (id) sendResponse(ws, id, { success: true });
         break;
       }
