@@ -1,53 +1,55 @@
 # ==========================================
 # Stage 1: Build & Compile Native Workers
 # ==========================================
-FROM oven/bun:1-debian AS builder
+FROM oven/bun:1 AS builder
 
 WORKDIR /app
 
-# Install minimal native build tools for Mediasoup C++ worker compilation
+# Install native build toolchain required by Mediasoup
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy workspace dependencies configuration
-COPY package.json turbo.json bun.lock* ./
+# Copy package definitions and lockfile first (optimizes layer caching)
+COPY package.json bun.lock* turbo.json ./
 COPY packages ./packages
 COPY apps/server ./apps/server
 
-# Install dependencies and compile native C++ binaries
+# Install dependencies and build Mediasoup C++ binaries
 RUN bun install --frozen-lockfile
 
 WORKDIR /app/apps/server
 
-# Build production bundle using --outdir flag
+# Bundle Elysia server into standalone JavaScript file
 RUN bun build \
-    --minify-whitespace \
-    --minify-syntax \
     --target=bun \
+    --minify \
+    --sourcemap=external \
     --outdir=./dist \
-    src/index.ts
+    ./src/index.ts
 
 # ==========================================
-# Stage 2: Minimal Production Runtime
+# Stage 2: Production Runtime
 # ==========================================
-FROM oven/bun:1-distroless AS runner
+FROM oven/bun:1-slim AS runner
 
 WORKDIR /app
 
-# Copy transpiled code
+# Copy built bundle and node_modules (with Mediasoup native binaries)
 COPY --from=builder /app/apps/server/dist ./dist
-
-# Copy Mediasoup native worker binaries and node_modules
-COPY --from=builder /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/server/node_modules ./apps/server/node_modules
+COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
 
 ENV NODE_ENV=production
+ENV MEDIASOUP_WORKER_BIN=/app/node_modules/mediasoup/worker/out/Release/mediasoup-worker
 
 EXPOSE 4000
 EXPOSE 10000-10100/udp
 EXPOSE 10000-10100/tcp
 
+# Run directly using the entrypoint bundle from /app
 CMD ["bun", "run", "dist/index.js"]
