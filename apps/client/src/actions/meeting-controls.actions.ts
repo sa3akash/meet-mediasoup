@@ -69,3 +69,18 @@ export async function rejectWaitingParticipantAction(meetingId: string, waitingI
     return { error: "Failed to reject participant" };
   }
 }
+
+export async function updateMeetingPasscodeAction(meetingId: string, passcode: string | null) {
+  try {
+    const res = await fetch(`${API_BASE}/api/meetings/${meetingId}/passcode`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passcode }),
+    });
+    const data = await res.json();
+    return { success: res.ok, passcode: data.passcode, accessLevel: data.accessLevel };
+  } catch {
+    return { error: "Failed to update meeting passcode" };
+  }
+}
+

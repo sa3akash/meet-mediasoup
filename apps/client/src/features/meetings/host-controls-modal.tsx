@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   X,
   Lock,
@@ -16,13 +15,23 @@ import {
   SmilePlus,
   Shield,
   PhoneOff,
+  KeyRound,
+  Check,
+  RefreshCw,
 } from "lucide-react";
-import { lockMeetingAction, endMeetingForAllAction, updateMeetingSettingsAction } from "../../actions/meeting-controls.actions";
+import {
+  lockMeetingAction,
+  endMeetingForAllAction,
+  updateMeetingSettingsAction,
+  updateMeetingPasscodeAction,
+} from "../../actions/meeting-controls.actions";
+import { useState } from "react";
 
 interface Props {
   meetingId: string;
   initialLocked?: boolean;
   initialSettings?: any;
+  initialPasscode?: string;
   isOpen: boolean;
   onClose: () => void;
   onBroadcastSettings?: (settings: any) => void;
@@ -33,6 +42,7 @@ export function HostControlsModal({
   meetingId,
   initialLocked = false,
   initialSettings,
+  initialPasscode = "",
   isOpen,
   onClose,
   onBroadcastSettings,
@@ -40,6 +50,9 @@ export function HostControlsModal({
 }: Props) {
   const [locked, setLocked] = useState(initialLocked);
   const [settings, setSettings] = useState(initialSettings || {});
+  const [passcode, setPasscode] = useState(initialPasscode || initialSettings?.passcode || "");
+  const [isSavingPasscode, setIsSavingPasscode] = useState(false);
+  const [passcodeFeedback, setPasscodeFeedback] = useState<string | null>(null);
   const [isEnding, setIsEnding] = useState(false);
 
   if (!isOpen) return null;
@@ -61,6 +74,30 @@ export function HostControlsModal({
     await updateMeetingSettingsAction(meetingId, { [key]: nextValue });
   };
 
+  const handleSavePasscode = async (newCode: string | null) => {
+    setIsSavingPasscode(true);
+    setPasscodeFeedback(null);
+    try {
+      const res = await updateMeetingPasscodeAction(meetingId, newCode);
+      if (res.success) {
+        setPasscode(newCode || "");
+        setPasscodeFeedback(newCode ? "Password set successfully" : "Password removed (Room is Public)");
+        setTimeout(() => setPasscodeFeedback(null), 3500);
+      } else {
+        setPasscodeFeedback("Failed to update password");
+      }
+    } catch {
+      setPasscodeFeedback("Failed to update password");
+    } finally {
+      setIsSavingPasscode(false);
+    }
+  };
+
+  const handleGeneratePasscode = () => {
+    const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
+    setPasscode(randomPin);
+  };
+
   const handleEndMeeting = async () => {
     if (!confirm("Are you sure you want to end this meeting for all participants?")) return;
     setIsEnding(true);
@@ -68,6 +105,7 @@ export function HostControlsModal({
     await endMeetingForAllAction(meetingId);
     window.location.href = "/meetings";
   };
+
 
   const SETTING_ITEMS = [
     {
@@ -168,6 +206,73 @@ export function HostControlsModal({
             {locked ? "Unlock Meeting" : "Lock Meeting"}
           </button>
         </div>
+
+        {/* Meeting Password / Passcode Section */}
+        <div className="p-4 rounded-2xl bg-neutral-950/60 border border-white/5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-white text-xs font-semibold flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-indigo-400" />
+                Meeting Password / Passcode
+              </h4>
+              <p className="text-neutral-400 text-[11px] mt-0.5">
+                Require participants to enter a PIN or secret password to join
+              </p>
+            </div>
+            {passcode && (
+              <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
+                PROTECTED
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                placeholder="Set room password / PIN (e.g. 123456)"
+                className="w-full bg-neutral-900 border border-white/10 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono tracking-wider"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleGeneratePasscode}
+              title="Generate random PIN"
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              disabled={isSavingPasscode}
+              onClick={() => handleSavePasscode(passcode.trim())}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md transition-all flex items-center gap-1.5"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Save</span>
+            </button>
+            {passcode && (
+              <button
+                type="button"
+                disabled={isSavingPasscode}
+                onClick={() => handleSavePasscode(null)}
+                className="px-2.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white text-xs transition-colors"
+                title="Remove password"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {passcodeFeedback && (
+            <p className="text-[11px] text-emerald-400 font-medium animate-in fade-in">
+              {passcodeFeedback}
+            </p>
+          )}
+        </div>
+
 
         {/* In-Meeting Permission Toggles */}
         <div className="space-y-2">

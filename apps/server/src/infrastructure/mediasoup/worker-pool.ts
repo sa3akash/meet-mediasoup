@@ -130,10 +130,26 @@ class WorkerPool {
           on: () => {},
           close: () => {},
         }),
+        createPlainTransport: async (opts: any) => ({
+          id: crypto.randomUUID(),
+          tuple: { localIp: "127.0.0.1", localPort: 5004, protocol: "udp" },
+          connect: async () => {},
+          consume: async ({ producerId }: any) => ({
+            id: crypto.randomUUID(),
+            producerId,
+            kind: "video",
+            paused: false,
+            pause: async () => {},
+            resume: async () => {},
+            close: () => {},
+          }),
+          close: () => {},
+        }),
         observer: { on: () => {} },
         closed: false,
         close: () => {},
       }),
+
       on: () => {},
     } as unknown as Worker;
   }

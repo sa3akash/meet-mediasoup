@@ -19,6 +19,7 @@ export const crudRoutes = new Elysia()
         scheduledStartAt,
         scheduledEndAt,
         recurrenceRule,
+        timezone = "UTC",
         settings,
       } = body;
 
@@ -41,6 +42,7 @@ export const crudRoutes = new Elysia()
           scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt) : null,
           scheduledEndAt: scheduledEndAt ? new Date(scheduledEndAt) : null,
           recurrenceRule: recurrenceRule || null,
+          timezone: timezone || "UTC",
         })
         .returning();
 
@@ -96,6 +98,7 @@ export const crudRoutes = new Elysia()
         scheduledStartAt: t.Optional(t.String()),
         scheduledEndAt: t.Optional(t.String()),
         recurrenceRule: t.Optional(t.String()),
+        timezone: t.Optional(t.String()),
         settings: t.Optional(
           t.Object({
             waitingRoomEnabled: t.Optional(t.Boolean()),
@@ -115,7 +118,7 @@ export const crudRoutes = new Elysia()
     }
   )
   .get("/code/:slug", async ({ params, set }) => {
-    const meeting = await db.query.meetings.findFirst({
+    let meeting = await db.query.meetings.findFirst({
       where: eq(meetings.slug, params.slug),
       with: {
         settings: true,
@@ -124,6 +127,45 @@ export const crudRoutes = new Elysia()
         },
       },
     });
+
+    if (!meeting) {
+      // Auto-provision instant meeting for requested slug in development/ad-hoc mode
+      const defaultHost = await db.query.users.findFirst();
+      if (defaultHost) {
+        const meetingId = generateUUIDv7();
+        const [created] = await db
+          .insert(meetings)
+          .values({
+            id: meetingId,
+            hostId: defaultHost.id,
+            title: `Meeting (${params.slug})`,
+            slug: params.slug,
+            type: "INSTANT",
+            accessLevel: "PUBLIC",
+            status: "ACTIVE",
+            actualStartAt: new Date(),
+          })
+          .returning();
+
+        await db.insert(meetingSettings).values({
+          id: generateUUIDv7(),
+          meetingId: created.id,
+          waitingRoomEnabled: false,
+          allowGuestUsers: true,
+          maxParticipants: 100,
+        });
+
+        meeting = await db.query.meetings.findFirst({
+          where: eq(meetings.id, created.id),
+          with: {
+            settings: true,
+            host: {
+              columns: { id: true, name: true, avatarUrl: true },
+            },
+          },
+        });
+      }
+    }
 
     if (!meeting) {
       set.status = 404;
@@ -135,7 +177,7 @@ export const crudRoutes = new Elysia()
     "/code/:slug/verify",
     async ({ params, body, set }) => {
       const { passcode, email, userId } = body;
-      const meeting = await db.query.meetings.findFirst({
+      let meeting = await db.query.meetings.findFirst({
         where: eq(meetings.slug, params.slug),
         with: {
           settings: true,
@@ -144,6 +186,45 @@ export const crudRoutes = new Elysia()
           },
         },
       });
+
+      if (!meeting) {
+        // Auto-provision instant meeting for requested slug in development/ad-hoc mode
+        const defaultHost = await db.query.users.findFirst();
+        if (defaultHost) {
+          const meetingId = generateUUIDv7();
+          const [created] = await db
+            .insert(meetings)
+            .values({
+              id: meetingId,
+              hostId: defaultHost.id,
+              title: `Meeting (${params.slug})`,
+              slug: params.slug,
+              type: "INSTANT",
+              accessLevel: "PUBLIC",
+              status: "ACTIVE",
+              actualStartAt: new Date(),
+            })
+            .returning();
+
+          await db.insert(meetingSettings).values({
+            id: generateUUIDv7(),
+            meetingId: created.id,
+            waitingRoomEnabled: false,
+            allowGuestUsers: true,
+            maxParticipants: 100,
+          });
+
+          meeting = await db.query.meetings.findFirst({
+            where: eq(meetings.id, created.id),
+            with: {
+              settings: true,
+              host: {
+                columns: { id: true, name: true, avatarUrl: true },
+              },
+            },
+          });
+        }
+      }
 
       if (!meeting) {
         set.status = 404;

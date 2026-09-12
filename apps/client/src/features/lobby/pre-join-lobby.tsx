@@ -13,6 +13,8 @@ import {
   AlertCircle,
   Clock,
   Loader2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useMediaStore } from "../../stores/media-store";
 import { verifyMeetingAccessAction } from "../../actions/meeting.actions";
@@ -21,17 +23,27 @@ interface PreJoinLobbyProps {
   meetingTitle: string;
   slug: string;
   meetingData?: any;
+  userId?: string;
   initialDisplayName?: string;
   onJoin: (displayName: string) => void;
 }
 
-export function PreJoinLobby({ meetingTitle, slug, meetingData, initialDisplayName = "", onJoin }: PreJoinLobbyProps) {
+export function PreJoinLobby({
+  meetingTitle,
+  slug,
+  meetingData,
+  userId,
+  initialDisplayName = "",
+  onJoin,
+}: PreJoinLobbyProps) {
   const [name, setName] = useState(initialDisplayName);
   const [passcode, setPasscode] = useState("");
+  const [showPasscode, setShowPasscode] = useState(false);
   const [email, setEmail] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isWaitingRoom, setIsWaitingRoom] = useState(false);
+
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const {
@@ -87,7 +99,12 @@ export function PreJoinLobby({ meetingTitle, slug, meetingData, initialDisplayNa
     setIsVerifying(true);
 
     try {
-      const result = await verifyMeetingAccessAction(slug, passcode.trim(), email.trim());
+      const result = await verifyMeetingAccessAction(
+        slug,
+        passcode.trim(),
+        email.trim(),
+        userId || meetingData?.hostId
+      );
       if (!result.allowed) {
         setError(result.message || "Access denied to this meeting room.");
         setIsVerifying(false);
@@ -270,24 +287,38 @@ export function PreJoinLobby({ meetingTitle, slug, meetingData, initialDisplayNa
               />
             </div>
 
-            {/* If Private: Passcode Required */}
-            {accessLevel === "PRIVATE" && (
+            {/* If Private or Passcode protected: Passcode Required */}
+            {(accessLevel === "PRIVATE" || Boolean(meetingData?.passcode) || Boolean(meetingData?.hasPasscode)) && (
               <div className="flex flex-col gap-1.5">
-                <label htmlFor="passcode" className="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>Meeting Passcode</span>
+                <label htmlFor="passcode" className="text-xs font-semibold uppercase tracking-wider text-amber-400 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Meeting Password / Passcode</span>
+                  </span>
+                  <span className="text-[10px] text-neutral-400 font-normal normal-case">Required to join</span>
                 </label>
-                <input
-                  id="passcode"
-                  type="password"
-                  value={passcode}
-                  onChange={(e) => setPasscode(e.target.value)}
-                  placeholder="Enter 6-digit meeting PIN"
-                  required
-                  className="w-full bg-neutral-900 border border-white/10 focus:border-amber-500 rounded-2xl px-4 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-sm font-mono tracking-widest"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    id="passcode"
+                    type={showPasscode ? "text" : "password"}
+                    value={passcode}
+                    onChange={(e) => setPasscode(e.target.value)}
+                    placeholder="Enter meeting password or PIN"
+                    required
+                    className="w-full bg-neutral-900 border border-white/10 focus:border-amber-500 rounded-2xl pl-4 pr-11 py-3 text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-sm font-mono tracking-wider"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasscode(!showPasscode)}
+                    className="absolute right-3 p-1.5 text-neutral-400 hover:text-white rounded-lg transition-colors"
+                    title={showPasscode ? "Hide password" : "Show password"}
+                  >
+                    {showPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             )}
+
 
             {/* If Invite Only: Email Required */}
             {accessLevel === "INVITE_ONLY" && (

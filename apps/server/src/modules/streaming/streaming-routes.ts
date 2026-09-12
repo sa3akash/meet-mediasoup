@@ -162,4 +162,22 @@ export const streamingRoutes = new Elysia({ prefix: "/api/streaming" })
         })
       ),
     }
+  )
+  // Get streaming history
+  .get(
+    "/:meetingId/history",
+    async ({ params: { meetingId } }) => {
+      const history = await streamingService.getMeetingStreamHistory(meetingId);
+      return { success: true, history };
+    },
+    {
+      detail: {
+        tags: ["Streaming"],
+        summary: "Get stream history",
+      },
+      params: t.Object({
+        meetingId: t.String(),
+      }),
+    }
   );
+

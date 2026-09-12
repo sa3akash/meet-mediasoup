@@ -45,4 +45,20 @@ export const notificationRoutes = new Elysia({ prefix: "/api/notifications" })
       set.status = 500;
       return { error: err.message || "Failed to send notification" };
     }
+  })
+  .post("/push-subscribe", async ({ body, set }) => {
+    try {
+      const { userId, subscription } = body as any;
+      if (!userId || !subscription) {
+        set.status = 400;
+        return { error: "Missing userId or subscription" };
+      }
+
+      await notificationService.registerPushSubscription(userId, subscription);
+      return { success: true, message: "Push subscription registered" };
+    } catch (err: any) {
+      set.status = 500;
+      return { error: err.message || "Failed to register push subscription" };
+    }
   });
+

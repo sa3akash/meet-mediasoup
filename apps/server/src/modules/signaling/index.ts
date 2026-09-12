@@ -1,4 +1,8 @@
 import type { ServerWebSocket } from "bun";
+import { db } from "../../infrastructure/database";
+import { users } from "../../infrastructure/database/schema";
+import { eq } from "drizzle-orm";
+import { abuseDetectionService } from "../moderation/abuse-detection-service";
 import { roomManager } from "../../infrastructure/mediasoup/room-manager";
 import { audioObserverService } from "../../infrastructure/mediasoup/audio-observer-service";
 import {
@@ -29,6 +33,7 @@ import { streamingService } from "../streaming/streaming-service";
 import { whiteboardService } from "../whiteboards/whiteboard-service";
 import { fileService } from "../files/file-service";
 import { notificationService } from "../notifications/notification-service";
+import { analyticsService } from "../analytics/analytics-service";
 
 // Listen to audioObserverService to broadcast active speaker changes
 audioObserverService.on("activeSpeaker", ({ roomId, producerId, peerId, volume }) => {
@@ -85,6 +90,18 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
     switch (method) {
       case "meeting:join": {
         const { meetingId, displayName, userId, role = "PARTICIPANT" } = data;
+
+        if (userId) {
+          const userRec = await db.query.users.findFirst({
+            where: eq(users.id, userId),
+          });
+          if (userRec?.bannedAt) {
+            sendError(ws, id, 403, "Your account has been suspended by an administrator.");
+            ws.close();
+            return;
+          }
+        }
+
         ws.data.meetingId = meetingId;
         ws.data.participantId = ws.data.participantId || crypto.randomUUID();
         ws.data.userId = userId;
@@ -210,6 +227,18 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         }
 
         const content = data.content || "";
+
+        // Moderation & Abuse / Spam Detection Filter
+        const abuseCheck = abuseDetectionService.checkChatMessage(
+          ws.data.participantId!,
+          content,
+          ws.data.userId
+        );
+        if (!abuseCheck.allowed) {
+          sendError(ws, id, 400, abuseCheck.reason || "Message blocked by moderation filter.");
+          break;
+        }
+
         const linkPreview = data.linkPreview || chatService.extractLinkPreview(content);
         const mentions = data.mentions || chatService.extractMentions(content);
 
@@ -452,10 +481,16 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
 
         const allParticipants = await getRoomParticipants(ws.data.meetingId);
         const caller = allParticipants.find((p: any) => (p.id || p.participantId) === ws.data.participantId);
-        const isCallerHost = ws.data.role === "HOST" || caller?.role === "HOST";
+        const isCallerPrivileged =
+          ws.data.role === "HOST" ||
+          ws.data.role === "MODERATOR" ||
+          ws.data.role === "ADMIN" ||
+          caller?.role === "HOST" ||
+          caller?.role === "MODERATOR" ||
+          caller?.role === "ADMIN";
 
-        if (!isCallerHost) {
-          sendError(ws, id, 403, "Only the meeting host can remove participants");
+        if (!isCallerPrivileged) {
+          sendError(ws, id, 403, "Only the meeting host or moderators can remove participants");
           break;
         }
 
@@ -1071,7 +1106,8 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
       // FILE SHARING
       // ==========================================
       case "file:upload": {
-        if (!ws.data.meetingId) {
+        const meetingId = data?.meetingId || ws.data.meetingId;
+        if (!meetingId) {
           sendError(ws, id, 400, "Missing meetingId");
           break;
         }
@@ -1084,15 +1120,15 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
 
         const buffer = Buffer.from(base64Data, "base64");
         const file = await fileService.uploadFile({
-          meetingId: ws.data.meetingId,
-          uploaderId: ws.data.userId || ws.data.participantId || "anonymous",
-          uploaderName: ws.data.displayName || "Participant",
+          meetingId,
+          uploaderId: data.uploaderId || ws.data.userId || ws.data.participantId || "anonymous",
+          uploaderName: data.uploaderName || ws.data.displayName || "Participant",
           fileName,
           mimeType: mimeType || "application/octet-stream",
           fileBuffer: buffer,
         });
 
-        broadcastToRoom(ws.data.meetingId, {
+        broadcastToRoom(meetingId, {
           event: "file:uploaded",
           data: { file },
         });
@@ -1102,26 +1138,28 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
       }
 
       case "file:list": {
-        if (!ws.data.meetingId) {
+        const meetingId = data?.meetingId || ws.data.meetingId;
+        if (!meetingId) {
           sendError(ws, id, 400, "Missing meetingId");
           break;
         }
 
-        const files = await fileService.getMeetingFiles(ws.data.meetingId);
+        const files = await fileService.getMeetingFiles(meetingId);
         sendResponse(ws, id, { success: true, files });
         break;
       }
 
       case "file:delete": {
-        if (!ws.data.meetingId) {
+        const meetingId = data?.meetingId || ws.data.meetingId;
+        if (!meetingId) {
           sendError(ws, id, 400, "Missing meetingId");
           break;
         }
 
         const { fileId } = data;
-        const success = await fileService.deleteFile(ws.data.meetingId, fileId);
+        const success = await fileService.deleteFile(meetingId, fileId);
         if (success) {
-          broadcastToRoom(ws.data.meetingId, {
+          broadcastToRoom(meetingId, {
             event: "file:deleted",
             data: { fileId },
           });
@@ -1187,6 +1225,37 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
 
         const success = await notificationService.markAsRead(targetUser, notificationId);
         sendResponse(ws, id, { success });
+        break;
+      }
+
+      // ==========================================
+      // ANALYTICS & TELEMETRY
+      // ==========================================
+      case "telemetry:report": {
+        const meetingId = data.meetingId || ws.data.meetingId;
+        if (!meetingId) {
+          sendError(ws, id, 400, "Missing meetingId for telemetry report");
+          break;
+        }
+
+        const tracked = await analyticsService.trackTelemetry(
+          meetingId,
+          ws.data.userId || ws.data.participantId,
+          data
+        );
+        sendResponse(ws, id, { success: true, tracked });
+        break;
+      }
+
+      case "analytics:getSummary": {
+        const meetingId = data.meetingId || ws.data.meetingId;
+        if (!meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const summary = await analyticsService.getMeetingSummary(meetingId);
+        sendResponse(ws, id, { success: true, summary });
         break;
       }
 

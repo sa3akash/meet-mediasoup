@@ -9,6 +9,11 @@ import { fileRoutes } from "./modules/files/file-routes";
 import { notificationRoutes } from "./modules/notifications/notification-routes";
 import { streamingRoutes } from "./modules/streaming";
 import { whiteboardRoutes } from "./modules/whiteboards";
+import { recordingRoutes } from "./modules/recordings";
+import { calendarRoutes } from "./modules/calendar";
+import { analyticsRoutes } from "./modules/analytics";
+import { moderationRoutes } from "./modules/moderation";
+import { adminRoutes } from "./modules/admin";
 import { workerPool } from "./infrastructure/mediasoup/worker-pool";
 import { redis } from "./infrastructure/redis";
 import {
@@ -67,7 +72,32 @@ const app = new Elysia()
   .use(notificationRoutes)
   .use(streamingRoutes)
   .use(whiteboardRoutes)
-  // Native WebSocket Signaling Endpoint
+  .use(recordingRoutes)
+  .use(calendarRoutes)
+  .use(analyticsRoutes)
+  .use(moderationRoutes)
+  .use(adminRoutes)
+
+  // Local uploads fallback file serving
+  .get("/uploads/*", ({ params, set }) => {
+    const filename = (params as any)["*"];
+    const filePath = `./public/uploads/${filename}`;
+    const file = Bun.file(filePath);
+    return file;
+  })
+
+  // Native WebSocket Signaling Endpoints (Support both root and /ws)
+  .ws("/", {
+    open(ws: any) {
+      handleSocketOpen(ws);
+    },
+    message(ws: any, message: any) {
+      handleSocketMessage(ws, message);
+    },
+    close(ws: any) {
+      handleSocketClose(ws);
+    },
+  })
   .ws("/ws", {
     open(ws: any) {
       handleSocketOpen(ws);

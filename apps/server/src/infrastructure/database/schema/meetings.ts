@@ -20,6 +20,7 @@ export const meetings = pgTable(
     actualEndAt: timestamp("actual_end_at", { withTimezone: true }),
     status: varchar("status", { length: 20 }).default("SCHEDULED").notNull(), // SCHEDULED, ACTIVE, ENDED, CANCELLED
     recurrenceRule: text("recurrence_rule"),
+    timezone: varchar("timezone", { length: 64 }).default("UTC"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),

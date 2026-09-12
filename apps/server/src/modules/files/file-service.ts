@@ -1,5 +1,8 @@
 import { uploadToStorage } from "../../infrastructure/storage/s3-client";
 import { redis } from "../../infrastructure/redis";
+import { db } from "../../infrastructure/database";
+import { fileUploads } from "../../infrastructure/database/schema/files";
+import { eq } from "drizzle-orm";
 
 export interface SharedFileRecord {
   id: string;
@@ -67,6 +70,33 @@ export class FileService {
       await redis.rpush(this.getRedisKey(meetingId), JSON.stringify(record));
     } catch {}
 
+    // Persist to PostgreSQL if uploader exists in database
+    try {
+      const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (isValidUuid.test(uploaderId)) {
+        const userExists = await db.query.users.findFirst({
+          where: (u, { eq }) => eq(u.id, uploaderId),
+        }).catch(() => null);
+
+        if (userExists) {
+          await db.insert(fileUploads).values({
+            id: fileId,
+            uploaderId,
+            meetingId: isValidUuid.test(meetingId) ? meetingId : undefined,
+            fileName,
+            fileSizeBytes: fileBuffer.length,
+            mimeType,
+            s3Key,
+            fileUrl,
+            scanStatus: "PENDING",
+          });
+        }
+      }
+    } catch (dbErr) {
+      // Guest or unregistered uploader
+    }
+
+
     // Trigger asynchronous Virus Scan Queue processing
     this.enqueueVirusScan(meetingId, record);
 
@@ -100,6 +130,13 @@ export class FileService {
       }
     } catch {}
 
+    try {
+      const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (isValidUuid.test(fileId)) {
+        await db.delete(fileUploads).where(eq(fileUploads.id, fileId));
+      }
+    } catch {}
+
     return true;
   }
 
@@ -119,9 +156,20 @@ export class FileService {
           }
           await pipeline.exec();
         } catch {}
+
+        try {
+          const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (isValidUuid.test(record.id)) {
+            await db
+              .update(fileUploads)
+              .set({ scanStatus: "CLEAN" })
+              .where(eq(fileUploads.id, record.id));
+          }
+        } catch {}
       }
     }, 1200);
   }
 }
 
 export const fileService = new FileService();
+

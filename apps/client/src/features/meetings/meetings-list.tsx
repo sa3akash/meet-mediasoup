@@ -14,6 +14,8 @@ import {
   Copy,
   Check,
   Trash2,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { cancelMeetingAction } from "../../actions/meeting.actions";
 
@@ -151,13 +153,45 @@ export function MeetingsList({ meetings }: Props) {
             </div>
 
             <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
-              <button
-                onClick={() => handleCopy(m.slug)}
-                className="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
-              >
-                {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{isCopied ? "Link Copied" : m.slug}</span>
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => handleCopy(m.slug)}
+                  className="py-2 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
+                >
+                  {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{isCopied ? "Copied" : m.slug}</span>
+                </button>
+
+                {/* Calendar Sync Buttons */}
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/calendar/${m.id}/google-url`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    try {
+                      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/calendar/${m.id}/google-url`);
+                      const data = await res.json();
+                      if (data.url) window.open(data.url, "_blank");
+                    } catch {
+                      window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(m.title)}`, "_blank");
+                    }
+                  }}
+                  title="Add to Google Calendar"
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-blue-400 transition-colors"
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                </a>
+
+                <a
+                  href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/calendar/${m.id}/ics`}
+                  download={`${m.slug}.ics`}
+                  title="Export .ICS File (Outlook / Apple / Thunderbird)"
+                  className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-purple-400 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                </a>
+              </div>
 
               <Link
                 href={`/meeting/${m.slug}`}

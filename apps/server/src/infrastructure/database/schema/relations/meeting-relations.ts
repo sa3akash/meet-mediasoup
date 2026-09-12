@@ -49,3 +49,17 @@ export const meetingParticipantsRelations = relations(meetingParticipants, ({ on
   }),
   breakoutAssignments: many(breakoutParticipants),
 }));
+
+export const meetingRecordingsRelations = relations(meetingRecordings, ({ one }) => ({
+  meeting: one(meetings, {
+    fields: [meetingRecordings.meetingId],
+    references: [meetings.id],
+  }),
+}));
+
+export const meetingStreamsRelations = relations(meetingStreams, ({ one }) => ({
+  meeting: one(meetings, {
+    fields: [meetingStreams.meetingId],
+    references: [meetings.id],
+  }),
+}));

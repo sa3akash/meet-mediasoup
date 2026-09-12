@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Video, CalendarPlus } from "lucide-react";
+import { Video, CalendarPlus, Calendar, BarChart3, ShieldCheck } from "lucide-react";
 import { createInstantMeetingAction } from "../../../actions/meeting.actions";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -132,6 +132,38 @@ export default async function MeetingsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">Meetings & Scheduling</h1>
           <p className="text-neutral-400 text-sm mt-1">Start instant rooms, schedule recurring events, or use reusable templates.</p>
+        </div>
+
+        {/* Global Nav Tabs */}
+        <div className="flex items-center gap-2 p-1 rounded-2xl bg-neutral-900 border border-white/5">
+          <Link
+            href="/meetings"
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2"
+          >
+            <Video className="w-3.5 h-3.5" />
+            <span>Meetings</span>
+          </Link>
+          <Link
+            href="/calendar"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Calendar</span>
+          </Link>
+          <Link
+            href="/analytics"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Analytics</span>
+          </Link>
+          <Link
+            href="/admin"
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Admin</span>
+          </Link>
         </div>
 
         <div className="flex items-center gap-3">

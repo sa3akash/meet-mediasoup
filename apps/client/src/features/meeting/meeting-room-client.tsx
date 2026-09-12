@@ -21,6 +21,7 @@ import { LiveStreamingModal } from "../streaming/live-streaming-modal";
 import { WhiteboardModal, type WhiteboardElement } from "../whiteboard/whiteboard-modal";
 import { FilesPanel } from "../files/files-panel";
 import { NotificationCenter, type NotificationItem } from "../notifications/notification-center";
+import { ReportModal } from "./components/report-modal";
 import {
   BreakoutStateEvent,
   MediaForcedEvent,
@@ -87,6 +88,10 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
   // Screen Share Modal State
   const [isScreenShareModalOpen, setIsScreenShareModalOpen] = useState(false);
 
+  // Moderation Report Modal State
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportingTarget, setReportingTarget] = useState<{ id: string; name: string } | null>(null);
+
   const {
     isChatOpen,
     toggleChat,
@@ -113,6 +118,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     setRecordingDownloadUrl,
     setPinnedMessage,
     setChatUserMuted,
+    myParticipantId,
   } = useMeetingStore();
   const { resetMedia } = useMediaStore();
 
@@ -554,6 +560,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         meetingTitle={initialMeeting?.title || `Meeting Room (${slug})`}
         slug={slug}
         meetingData={initialMeeting}
+        userId={currentUser?.id}
         initialDisplayName={displayName || currentUser?.name || ""}
         onJoin={handleJoin}
       />
@@ -668,16 +675,18 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       {/* Waiting Room Real-time Management */}
       <WaitingRoomManager meetingId={slug} hostId={initialMeeting?.hostId || ""} />
 
-      {/* Host Controls Modal with all 10 settings */}
+      {/* Host Controls Modal with all settings & passcode controls */}
       <HostControlsModal
         meetingId={slug}
         initialLocked={meetingSettings.lockMeeting}
         initialSettings={meetingSettings}
+        initialPasscode={initialMeeting?.passcode}
         isOpen={isHostControlsOpen}
         onClose={() => setIsHostControlsOpen(false)}
         onBroadcastSettings={handleBroadcastSettings}
         onEndMeetingForAll={() => sendRequest("meeting:endForAll").catch(() => {})}
       />
+
 
       <div className="flex-1 flex w-full h-full overflow-hidden">
         <MeetingGrid localDisplayName={displayName} />
@@ -702,6 +711,10 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
             onMuteAll={muteAllParticipants}
             onPromoteParticipant={promoteParticipant}
             onSpotlightParticipant={spotlightParticipant}
+            onReportParticipant={(target) => {
+              setReportingTarget(target);
+              setIsReportModalOpen(true);
+            }}
           />
         )}
         <PollsPanel
@@ -883,6 +896,17 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         onStartLocalRecording={handleStartLocalRecording}
         onStopLocalRecording={handleStopLocalRecording}
         localDuration={localDuration}
+      />
+
+      <ReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => {
+          setIsReportModalOpen(false);
+          setReportingTarget(null);
+        }}
+        reporterId={currentUser?.id || myParticipantId || "guest"}
+        meetingId={initialMeeting?.id || slug}
+        targetUser={reportingTarget}
       />
 
       <ControlBar

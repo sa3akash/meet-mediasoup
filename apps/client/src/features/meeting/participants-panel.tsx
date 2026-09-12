@@ -15,6 +15,7 @@ import {
   UserX,
   Sparkles,
   Shield,
+  Flag,
 } from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { useMediaStore } from "../../stores/media-store";
@@ -26,6 +27,7 @@ interface ParticipantsPanelProps {
   onMuteAll?: () => void;
   onPromoteParticipant?: (participantId: string, role: "CO_HOST" | "PARTICIPANT") => void;
   onSpotlightParticipant?: (participantId: string | null) => void;
+  onReportParticipant?: (participant: { id: string; name: string }) => void;
 }
 
 export function ParticipantsPanel({
@@ -35,6 +37,7 @@ export function ParticipantsPanel({
   onMuteAll,
   onPromoteParticipant,
   onSpotlightParticipant,
+  onReportParticipant,
 }: ParticipantsPanelProps) {
   const [search, setSearch] = useState("");
   const {
@@ -256,6 +259,17 @@ export function ParticipantsPanel({
                     title={`Remove ${p.displayName || "Participant"}`}
                   >
                     <UserX className="w-4 h-4" />
+                  </button>
+                )}
+
+                {/* Report Participant */}
+                {Boolean(onReportParticipant) && (
+                  <button
+                    onClick={() => onReportParticipant?.({ id: p.id, name: p.displayName || "Participant" })}
+                    className="p-1.5 rounded-lg text-white/40 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                    title={`Report ${p.displayName || "Participant"}`}
+                  >
+                    <Flag className="w-4 h-4" />
                   </button>
                 )}
 

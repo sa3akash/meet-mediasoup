@@ -1,5 +1,8 @@
 import { spawn, type ChildProcess } from "child_process";
 import { redis } from "../../infrastructure/redis";
+import { db } from "../../infrastructure/database";
+import { meetingStreams } from "../../infrastructure/database/schema/recordings";
+import { eq } from "drizzle-orm";
 
 export interface StreamingDestination {
   id: string;
@@ -100,6 +103,23 @@ export class StreamingService {
 
         meetingMap.set(dest.id, session);
         results.push({ id: dest.id, platform: dest.platform, status: "STREAMING" });
+
+        // Persist stream record in DB
+        try {
+          const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (isValidUuid.test(meetingId)) {
+            await db.insert(meetingStreams).values({
+              id: isValidUuid.test(dest.id) ? dest.id : crypto.randomUUID(),
+              meetingId,
+              platform: dest.platform,
+              rtmpUrl: dest.rtmpUrl,
+              streamKey: dest.streamKey || "key",
+              status: "STREAMING",
+            });
+          }
+        } catch (dbErr) {
+          console.warn("[StreamingService] DB stream log notice:", (dbErr as any).message || dbErr);
+        }
       } catch (err) {
         console.warn("[StreamingService] Failed to spawn FFmpeg RTMP process:", err);
         results.push({ id: dest.id, platform: dest.platform, status: "ERROR" });
@@ -151,6 +171,17 @@ export class StreamingService {
       }
     } catch {}
 
+    // Update DB record status to STOPPED
+    try {
+      const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (isValidUuid.test(meetingId)) {
+        await db
+          .update(meetingStreams)
+          .set({ status: "STOPPED", updatedAt: new Date() })
+          .where(eq(meetingStreams.meetingId, meetingId));
+      }
+    } catch {}
+
     return true;
   }
 
@@ -178,6 +209,20 @@ export class StreamingService {
       destinations,
     };
   }
+
+  public async getMeetingStreamHistory(meetingId: string): Promise<any[]> {
+    try {
+      const isValidUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (isValidUuid.test(meetingId)) {
+        return await db
+          .select()
+          .from(meetingStreams)
+          .where(eq(meetingStreams.meetingId, meetingId));
+      }
+    } catch {}
+    return [];
+  }
 }
 
 export const streamingService = new StreamingService();
+

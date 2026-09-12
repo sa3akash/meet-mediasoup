@@ -6,7 +6,15 @@ import { useMeetingStore } from "../stores/meeting-store";
 import { useMediaStore } from "../stores/media-store";
 import { useSignalingRpc } from "./mediasoup/use-signaling-rpc";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/ws";
+function getWsUrl(): string {
+  let url = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:4000/ws";
+  if (!url.endsWith("/ws")) {
+    url = `${url.replace(/\/+$/, "")}/ws`;
+  }
+  return url;
+}
+
+const WS_URL = getWsUrl();
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [

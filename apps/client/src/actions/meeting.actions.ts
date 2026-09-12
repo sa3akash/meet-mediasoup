@@ -87,6 +87,7 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
   const scheduledStartAt = formData.get("scheduledStartAt") as string;
   const scheduledEndAt = formData.get("scheduledEndAt") as string;
   const recurrenceRule = formData.get("recurrenceRule") as string;
+  const timezone = (formData.get("timezone") as string) || "UTC";
 
   const settings = {
     waitingRoomEnabled: formData.get("waitingRoomEnabled") === "on",
@@ -102,6 +103,7 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
   };
 
   let createdSlug = "";
+  let createdMeeting: any = null;
   try {
     const res = await fetch(`${API_BASE}/api/meetings`, {
       method: "POST",
@@ -117,6 +119,7 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
         scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : undefined,
         scheduledEndAt: scheduledEndAt ? new Date(scheduledEndAt).toISOString() : undefined,
         recurrenceRule: recurrenceRule || undefined,
+        timezone,
         settings,
       }),
     });
@@ -126,6 +129,7 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
       return { error: data.error || "Failed to create meeting" };
     }
     createdSlug = data.meeting.slug;
+    createdMeeting = data.meeting;
   } catch {
     return { error: "Network error occurred while scheduling meeting" };
   }
@@ -134,7 +138,7 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
   if (type === "INSTANT") {
     redirect(`/meeting/${createdSlug}`);
   }
-  return { success: true, slug: createdSlug };
+  return { success: true, slug: createdSlug, meeting: createdMeeting };
 }
 
 export async function verifyMeetingAccessAction(

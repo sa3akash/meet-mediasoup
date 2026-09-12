@@ -11,20 +11,50 @@ import {
   Sparkles,
   Zap,
   Repeat,
+  Globe,
+  Download,
+  ExternalLink,
+  ArrowRight,
 } from "lucide-react";
 import { createMeetingAction } from "../../actions/meeting.actions";
 import { MeetingSettingsChecklist } from "./meeting-settings-checklist";
+import Link from "next/link";
+
+const TIMEZONE_OPTIONS = [
+  { value: "UTC", label: "UTC (Coordinated Universal Time)" },
+  { value: "America/New_York", label: "Eastern Time (US & Canada)" },
+  { value: "America/Chicago", label: "Central Time (US & Canada)" },
+  { value: "America/Denver", label: "Mountain Time (US & Canada)" },
+  { value: "America/Los_Angeles", label: "Pacific Time (US & Canada)" },
+  { value: "Europe/London", label: "London (GMT / BST)" },
+  { value: "Europe/Paris", label: "Paris, Berlin, Amsterdam (CET)" },
+  { value: "Asia/Dubai", label: "Dubai, Abu Dhabi (GST)" },
+  { value: "Asia/Dhaka", label: "Dhaka (BST / UTC+6)" },
+  { value: "Asia/Kolkata", label: "India Standard Time (IST)" },
+  { value: "Asia/Singapore", label: "Singapore, Beijing (SGT)" },
+  { value: "Asia/Tokyo", label: "Tokyo, Seoul (JST)" },
+  { value: "Australia/Sydney", label: "Sydney, Melbourne (AEST)" },
+];
 
 export function ScheduleMeetingForm() {
   const [state, formAction, pending] = useActionState(createMeetingAction, null);
   const [meetingType, setMeetingType] = useState<"INSTANT" | "SCHEDULED" | "RECURRING">("SCHEDULED");
   const [accessLevel, setAccessLevel] = useState<"PUBLIC" | "PRIVATE" | "INVITE_ONLY">("PUBLIC");
   const [passcode, setPasscode] = useState("");
+  const [timezone, setTimezone] = useState(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch {
+      return "UTC";
+    }
+  });
 
   const generatePasscode = () => {
     const pin = Math.floor(100000 + Math.random() * 900000).toString();
     setPasscode(pin);
   };
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -35,14 +65,86 @@ export function ScheduleMeetingForm() {
         </div>
       )}
       {state?.success && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center gap-3">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span>Meeting created successfully! Meeting code: <strong className="font-mono">{state.slug}</strong></span>
+        <div className="p-5 rounded-3xl bg-gradient-to-br from-emerald-500/10 via-neutral-900 to-indigo-500/10 border border-emerald-500/30 text-white space-y-4 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-base">Meeting Scheduled Successfully!</h4>
+              <p className="text-xs text-neutral-400">
+                Code: <strong className="font-mono text-emerald-300">{state.slug}</strong>
+              </p>
+            </div>
+          </div>
+
+          {/* Sync & Action Options */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2">
+            <a
+              href={`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/google-url`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={async (e) => {
+                e.preventDefault();
+                try {
+                  const r = await fetch(`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/google-url`);
+                  const d = await r.json();
+                  if (d.url) window.open(d.url, "_blank");
+                } catch {
+                  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(state.meeting?.title || "Meeting")}`, "_blank");
+                }
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:border-indigo-500/50"
+            >
+              <Calendar className="w-4 h-4 text-blue-400" />
+              <span>Google Calendar</span>
+              <ExternalLink className="w-3 h-3 text-neutral-500" />
+            </a>
+
+            <a
+              href={`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/outlook-url`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={async (e) => {
+                e.preventDefault();
+                try {
+                  const r = await fetch(`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/outlook-url`);
+                  const d = await r.json();
+                  if (d.liveUrl) window.open(d.liveUrl, "_blank");
+                } catch {
+                  window.open("https://outlook.live.com/calendar", "_blank");
+                }
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:border-cyan-500/50"
+            >
+              <Calendar className="w-4 h-4 text-cyan-400" />
+              <span>Outlook Calendar</span>
+              <ExternalLink className="w-3 h-3 text-neutral-500" />
+            </a>
+
+            <a
+              href={`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/ics`}
+              download={`${state.slug}.ics`}
+              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:border-purple-500/50"
+            >
+              <Download className="w-4 h-4 text-purple-400" />
+              <span>Export .ICS File</span>
+            </a>
+
+            <Link
+              href={`/meeting/${state.slug}`}
+              className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/30"
+            >
+              <span>Join Room</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       )}
 
       <input type="hidden" name="type" value={meetingType} />
       <input type="hidden" name="accessLevel" value={accessLevel} />
+      <input type="hidden" name="timezone" value={timezone} />
 
       {/* Meeting Category Selector Tabs */}
       <div className="flex flex-col gap-2">
@@ -129,6 +231,26 @@ export function ScheduleMeetingForm() {
               required
               className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
             />
+          </div>
+
+          {/* Timezone Selector */}
+          <div className="sm:col-span-2 flex flex-col gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Timezone</span>
+            </label>
+            <select
+              name="timezone"
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
+            >
+              {TIMEZONE_OPTIONS.map((tz) => (
+                <option key={tz.value} value={tz.value}>
+                  {tz.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       )}

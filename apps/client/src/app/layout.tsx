@@ -38,6 +38,7 @@ export default function RootLayout({
         "font-sans",
         inter.variable
       )}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col bg-neutral-950 text-white selection:bg-indigo-500 selection:text-white">
         <TooltipProvider>{children}</TooltipProvider>
