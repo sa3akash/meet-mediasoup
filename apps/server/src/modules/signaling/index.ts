@@ -174,18 +174,19 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
       }
 
       case "chat:send": {
+        const messagePayload = {
+          id: data.id || crypto.randomUUID(),
+          senderId: ws.data.participantId,
+          senderName: ws.data.displayName || "Participant",
+          content: data.content,
+          messageType: data.messageType || "TEXT",
+          createdAt: new Date().toISOString(),
+        };
         broadcastToRoom(ws.data.meetingId!, {
           event: "chat:message",
-          data: {
-            id: crypto.randomUUID(),
-            senderId: ws.data.participantId,
-            senderName: ws.data.displayName,
-            content: data.content,
-            messageType: data.messageType || "TEXT",
-            createdAt: new Date().toISOString(),
-          },
-        });
-        sendResponse(ws, id, { sent: true });
+          data: messagePayload,
+        }, ws);
+        sendResponse(ws, id, { sent: true, message: messagePayload });
         break;
       }
 
@@ -193,7 +194,7 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         broadcastToRoom(ws.data.meetingId!, {
           event: "reaction:received",
           data: { participantId: ws.data.participantId, emoji: data.emoji },
-        });
+        }, ws);
         sendResponse(ws, id, { acknowledged: true });
         break;
       }

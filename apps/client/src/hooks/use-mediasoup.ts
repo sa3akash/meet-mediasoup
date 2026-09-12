@@ -16,22 +16,45 @@ const RTC_CONFIG: RTCConfiguration = {
   iceCandidatePoolSize: 10,
 };
 
+export interface UseMediasoupCallbacks {
+  onChatMessage?: (msg: any) => void;
+  onReactionReceived?: (emoji: string) => void;
+  onMeetingEnded?: () => void;
+  onSettingsUpdated?: (settings: any) => void;
+}
+
 export function useMediasoup(
   meetingId: string,
   displayName: string,
   userId?: string,
+  callbacks?: UseMediasoupCallbacks,
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const myParticipantIdRef = useRef<string | null>(null);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const iceCandidatesQueueRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
+  // Callbacks in refs to avoid reconnection triggers
+  const onChatMessageRef = useRef(callbacks?.onChatMessage);
+  onChatMessageRef.current = callbacks?.onChatMessage;
+  const onReactionRef = useRef(callbacks?.onReactionReceived);
+  onReactionRef.current = callbacks?.onReactionReceived;
+  const onMeetingEndedRef = useRef(callbacks?.onMeetingEnded);
+  onMeetingEndedRef.current = callbacks?.onMeetingEnded;
+  const onSettingsUpdatedRef = useRef(callbacks?.onSettingsUpdated);
+  onSettingsUpdatedRef.current = callbacks?.onSettingsUpdated;
+
   const { localStream, removeRemoteStream, setRemoteStream } = useMediaStore();
   const localStreamRef = useRef<MediaStream | null>(localStream);
   localStreamRef.current = localStream;
 
-  const { addParticipant, removeParticipant, updateParticipant, setActiveSpeaker } =
-    useMeetingStore();
+  const {
+    addParticipant,
+    removeParticipant,
+    updateParticipant,
+    setActiveSpeaker,
+    setMyParticipantId,
+  } = useMeetingStore();
   const { sendRequest, handleRpcResponse } = useSignalingRpc(wsRef);
 
   // Audio level monitoring via Web Audio API
@@ -287,6 +310,7 @@ export function useMediasoup(
         });
 
         myParticipantIdRef.current = joinRes.participantId;
+        setMyParticipantId(joinRes.participantId);
 
         // 1. Immediately populate existing participants
         if (joinRes.existingParticipants && Array.isArray(joinRes.existingParticipants)) {
@@ -321,6 +345,34 @@ export function useMediasoup(
       if (handleRpcResponse(msg)) return;
 
       switch (msg.event) {
+        case "chat:message": {
+          if (onChatMessageRef.current) {
+            onChatMessageRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "reaction:received": {
+          if (onReactionRef.current && msg.data?.emoji) {
+            onReactionRef.current(msg.data.emoji);
+          }
+          break;
+        }
+
+        case "meeting:settingsUpdated": {
+          if (onSettingsUpdatedRef.current && msg.data?.settings) {
+            onSettingsUpdatedRef.current(msg.data.settings);
+          }
+          break;
+        }
+
+        case "meeting:ended": {
+          if (onMeetingEndedRef.current) {
+            onMeetingEndedRef.current();
+          }
+          break;
+        }
+
         case "participant:joined": {
           const pid = msg.data.id || msg.data.participantId;
           if (pid && pid !== myParticipantIdRef.current) {
@@ -354,14 +406,16 @@ export function useMediasoup(
 
         case "participant:mediaStateChanged": {
           const pid = msg.data.participantId || msg.data.id;
-          updateParticipant(pid, {
-            isAudioMuted: msg.data.isAudioMuted,
-            isVideoMuted: msg.data.isVideoMuted,
-            isScreenSharing: msg.data.isScreenSharing,
-            isHandRaised: msg.data.isHandRaised,
-          });
-          if (msg.data.isScreenSharing === false) {
-            setRemoteStream(pid, { screenStream: undefined });
+          if (pid && pid !== myParticipantIdRef.current) {
+            updateParticipant(pid, {
+              isAudioMuted: msg.data.isAudioMuted,
+              isVideoMuted: msg.data.isVideoMuted,
+              isScreenSharing: msg.data.isScreenSharing,
+              isHandRaised: msg.data.isHandRaised,
+            });
+            if (msg.data.isScreenSharing === false) {
+              setRemoteStream(pid, { screenStream: undefined });
+            }
           }
           break;
         }
@@ -420,9 +474,9 @@ export function useMediasoup(
         }
 
         case "webrtc:activeSpeaker": {
-          if (msg.data.peerId) {
+          if (msg.data.peerId && msg.data.peerId !== myParticipantIdRef.current) {
             setActiveSpeaker(msg.data.peerId);
-          } else {
+          } else if (!msg.data.peerId) {
             setActiveSpeaker(null);
           }
           break;
@@ -448,6 +502,7 @@ export function useMediasoup(
     removeRemoteStream,
     setRemoteStream,
     setActiveSpeaker,
+    setMyParticipantId,
     createPeerConnection,
     initiatePeerConnection,
   ]);

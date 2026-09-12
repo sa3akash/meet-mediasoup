@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PreJoinLobby } from "../lobby/pre-join-lobby";
 import { MeetingGrid } from "./meeting-grid";
 import { ControlBar } from "./control-bar";
 import { ChatPanel } from "../chat/chat-panel";
+import { ParticipantsPanel } from "./participants-panel";
 import { HostControlsModal } from "../meetings/host-controls-modal";
 import { WaitingRoomManager } from "../meetings/waiting-room-manager";
 import { useMeetingStore } from "../../stores/meeting-store";
@@ -24,27 +25,73 @@ interface Message {
 interface MeetingRoomClientProps {
   slug: string;
   initialMeeting?: any;
+  currentUser?: any;
 }
 
-export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientProps) {
+export function MeetingRoomClient({ slug, initialMeeting, currentUser }: MeetingRoomClientProps) {
   const router = useRouter();
   const [hasJoined, setHasJoined] = useState(false);
-  const [displayName, setDisplayName] = useState("");
+  const [displayName, setDisplayName] = useState(currentUser?.name || "");
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [isHostControlsOpen, setIsHostControlsOpen] = useState(false);
   const [meetingSettings, setMeetingSettings] = useState<any>(initialMeeting?.settings || {});
   const [meetingEndedModal, setMeetingEndedModal] = useState(false);
 
-  const { isChatOpen, isHost, setMeeting, reset: resetMeeting } = useMeetingStore();
+  const {
+    isChatOpen,
+    isParticipantsListOpen,
+    isHandRaised,
+    setHandRaised,
+    isHost,
+    setMeeting,
+    reset: resetMeeting,
+  } = useMeetingStore();
   const { resetMedia } = useMediaStore();
+
+  const handleIncomingMessage = useCallback((msg: any) => {
+    const newMsg: Message = {
+      id: msg.id || crypto.randomUUID(),
+      senderName: msg.senderName || "Participant",
+      content: msg.content,
+      createdAt: msg.createdAt || new Date().toISOString(),
+      isSelf: false,
+    };
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === newMsg.id)) return prev;
+      return [...prev, newMsg];
+    });
+  }, []);
+
+  const handleIncomingReaction = useCallback((emoji: string) => {
+    setActiveReaction(emoji);
+    setTimeout(() => setActiveReaction(null), 2500);
+  }, []);
+
+  const handleIncomingSettings = useCallback((settings: any) => {
+    setMeetingSettings(settings);
+  }, []);
+
+  const handleIncomingMeetingEnded = useCallback(() => {
+    setMeetingEndedModal(true);
+  }, []);
 
   const {
     sendRequest,
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
-  } = useMediasoup(hasJoined ? slug : "", displayName);
+  } = useMediasoup(
+    hasJoined ? slug : "",
+    displayName,
+    undefined,
+    {
+      onChatMessage: handleIncomingMessage,
+      onReactionReceived: handleIncomingReaction,
+      onSettingsUpdated: handleIncomingSettings,
+      onMeetingEnded: handleIncomingMeetingEnded,
+    }
+  );
 
   useEffect(() => {
     if (initialMeeting) {
@@ -72,8 +119,9 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
   };
 
   const handleSendMessage = async (content: string) => {
+    const msgId = crypto.randomUUID();
     const newMsg: Message = {
-      id: crypto.randomUUID(),
+      id: msgId,
       senderName: displayName,
       content,
       createdAt: new Date().toISOString(),
@@ -82,8 +130,10 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
     setMessages((prev) => [...prev, newMsg]);
 
     try {
-      await sendRequest("chat:send", { content });
-    } catch {}
+      await sendRequest("chat:send", { content, id: msgId });
+    } catch (err) {
+      console.warn("[Chat] Failed to send message:", err);
+    }
   };
 
   const handleSendReaction = (emoji: string) => {
@@ -91,6 +141,12 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
     setActiveReaction(emoji);
     setTimeout(() => setActiveReaction(null), 2500);
     sendRequest("reaction:add", { emoji }).catch(() => {});
+  };
+
+  const handleToggleHandRaise = () => {
+    const nextState = !isHandRaised;
+    setHandRaised(nextState);
+    sendRequest("participant:updateMediaState", { isHandRaised: nextState }).catch(() => {});
   };
 
   const handleBroadcastSettings = (updated: any) => {
@@ -104,6 +160,7 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
         meetingTitle={initialMeeting?.title || `Meeting Room (${slug})`}
         slug={slug}
         meetingData={initialMeeting}
+        initialDisplayName={displayName || currentUser?.name || ""}
         onJoin={handleJoin}
       />
     );
@@ -168,6 +225,9 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
             disableFileShare={!isHost && meetingSettings.disableFileShare}
           />
         )}
+        {isParticipantsListOpen && (
+          <ParticipantsPanel localDisplayName={displayName} />
+        )}
       </div>
 
       <ControlBar
@@ -177,6 +237,7 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
         onToggleAudio={toggleAudio}
         onToggleVideo={toggleVideo}
         onToggleScreenShare={toggleScreenShare}
+        onToggleHandRaise={handleToggleHandRaise}
         disableScreenShare={!isHost && meetingSettings.disableScreenShare}
         disableReactions={!isHost && meetingSettings.disableReactions}
         disableChat={!isHost && meetingSettings.disableChat}

@@ -16,8 +16,10 @@ interface MeetingState {
   isWhiteboardOpen: boolean;
   isParticipantsListOpen: boolean;
   isHandRaised: boolean;
+  myParticipantId: string | null;
 
   setMeeting: (meeting: { id: string; slug: string; title: string; isHost: boolean }) => void;
+  setMyParticipantId: (id: string | null) => void;
   addParticipant: (participant: ParticipantDTO) => void;
   removeParticipant: (participantId: string) => void;
   updateParticipant: (participantId: string, updates: Partial<ParticipantDTO>) => void;
@@ -37,6 +39,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   title: "Meeting",
   isHost: false,
   participants: new Map(),
+  myParticipantId: null,
   activeSpeakerId: null,
   pinnedParticipantId: null,
   layoutMode: "GRID",
@@ -48,10 +51,12 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setMeeting: ({ id, slug, title, isHost }) =>
     set({ meetingId: id, slug, title, isHost }),
 
+  setMyParticipantId: (myParticipantId) => set({ myParticipantId }),
+
   addParticipant: (participant: any) =>
     set((state) => {
       const id = participant.id || participant.participantId;
-      if (!id) return state;
+      if (!id || id === state.myParticipantId) return state;
       const next = new Map(state.participants);
       const existing = next.get(id);
       next.set(id, {
@@ -84,27 +89,14 @@ export const useMeetingStore = create<MeetingState>((set) => ({
 
   updateParticipant: (participantId, updates) =>
     set((state) => {
-      if (!participantId) return state;
+      if (!participantId || participantId === state.myParticipantId) return state;
       const next = new Map(state.participants);
       const existing = next.get(participantId);
       if (existing) {
         next.set(participantId, { ...existing, ...updates });
-      } else {
-        next.set(participantId, {
-          id: participantId,
-          meetingId: state.meetingId || "",
-          displayName: "Participant",
-          role: "PARTICIPANT" as any,
-          isAudioMuted: false,
-          isVideoMuted: false,
-          isScreenSharing: false,
-          isHandRaised: false,
-          connectionStatus: "CONNECTED" as any,
-          joinedAt: new Date().toISOString(),
-          ...updates,
-        });
+        return { participants: next };
       }
-      return { participants: next };
+      return state;
     }),
 
   setActiveSpeaker: (activeSpeakerId) => set({ activeSpeakerId }),

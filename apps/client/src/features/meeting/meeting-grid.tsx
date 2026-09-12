@@ -63,6 +63,7 @@ function PresentationStage({
 export function MeetingGrid({ localDisplayName }: MeetingGridProps) {
   const {
     participants,
+    myParticipantId,
     activeSpeakerId,
     pinnedParticipantId,
     layoutMode,
@@ -78,7 +79,9 @@ export function MeetingGrid({ localDisplayName }: MeetingGridProps) {
     isVideoMuted,
   } = useMediaStore();
 
-  const participantList = Array.from(participants.values());
+  const participantList = Array.from(participants.values()).filter(
+    (p) => p.id !== myParticipantId
+  );
 
   // Check if someone is sharing screen
   const remotePresenter = participantList.find(

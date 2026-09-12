@@ -22,7 +22,27 @@ export async function generateMetadata({
   };
 }
 
+import { cookies } from "next/headers";
+
 const API_BASE = process.env.API_URL || "http://localhost:4000";
+
+async function getCurrentUser() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("accessToken")?.value;
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.user || null;
+    }
+  } catch {}
+  return null;
+}
 
 async function getMeetingDetails(slug: string) {
   try {
@@ -43,6 +63,9 @@ export default async function MeetingRoomPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const meeting = await getMeetingDetails(slug);
-  return <MeetingRoomClient slug={slug} initialMeeting={meeting} />;
+  const [meeting, user] = await Promise.all([
+    getMeetingDetails(slug),
+    getCurrentUser(),
+  ]);
+  return <MeetingRoomClient slug={slug} initialMeeting={meeting} currentUser={user} />;
 }

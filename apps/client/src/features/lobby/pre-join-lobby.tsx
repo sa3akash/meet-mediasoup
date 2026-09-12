@@ -21,11 +21,12 @@ interface PreJoinLobbyProps {
   meetingTitle: string;
   slug: string;
   meetingData?: any;
+  initialDisplayName?: string;
   onJoin: (displayName: string) => void;
 }
 
-export function PreJoinLobby({ meetingTitle, slug, meetingData, onJoin }: PreJoinLobbyProps) {
-  const [name, setName] = useState("");
+export function PreJoinLobby({ meetingTitle, slug, meetingData, initialDisplayName = "", onJoin }: PreJoinLobbyProps) {
+  const [name, setName] = useState(initialDisplayName);
   const [passcode, setPasscode] = useState("");
   const [email, setEmail] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
