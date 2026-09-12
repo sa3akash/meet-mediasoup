@@ -1,4 +1,4 @@
-import type { DtlsParameters } from "mediasoup/node/lib/types";
+import type { DtlsParameters, DtlsState } from "mediasoup/types";
 import { routerBalancer } from "./router-balancer";
 import { mediasoupConfig } from "./config";
 import type { PeerMediaState } from "./types";
@@ -15,13 +15,20 @@ export async function createPeerTransport(
     enableTcp: true,
     preferUdp: true,
     initialAvailableOutgoingBitrate: mediasoupConfig.webRtcTransport.initialAvailableOutgoingBitrate,
-    maxIncomingBitrate: mediasoupConfig.webRtcTransport.maxIncomingBitrate,
     appData: { peerId: peer.peerId, direction },
   });
 
+  if (mediasoupConfig.webRtcTransport.maxIncomingBitrate) {
+    try {
+      await transport.setMaxIncomingBitrate(mediasoupConfig.webRtcTransport.maxIncomingBitrate);
+    } catch (err) {
+      console.warn("[Mediasoup] Warning setting maxIncomingBitrate:", err);
+    }
+  }
+
   peer.transports.set(transport.id, transport);
 
-  transport.on("dtlsstatechange", (dtlsState) => {
+  transport.on("dtlsstatechange", (dtlsState: DtlsState) => {
     if (dtlsState === "closed" || dtlsState === "failed") {
       transport.close();
     }

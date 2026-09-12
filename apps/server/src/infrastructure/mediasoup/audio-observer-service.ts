@@ -1,4 +1,4 @@
-import type { Router, AudioLevelObserver, Producer } from "mediasoup/node/lib/types";
+import type { Router, AudioLevelObserver, Producer } from "mediasoup/types";
 import EventEmitter from "events";
 
 class AudioObserverService extends EventEmitter {
@@ -14,7 +14,7 @@ class AudioObserverService extends EventEmitter {
       interval: 350,  // ms evaluation window
     });
 
-    observer.on("volumes", (volumes) => {
+    observer.on("volumes", (volumes: Array<{ producer: Producer; volume: number }>) => {
       const highest = volumes[0];
       if (highest) {
         this.emit("activeSpeaker", {

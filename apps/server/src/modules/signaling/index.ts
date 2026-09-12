@@ -40,11 +40,18 @@ export function handleSocketClose(ws: ServerWebSocket<SocketData>) {
   }, ws);
 }
 
-export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, message: string | Buffer) {
+export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, message: any) {
   try {
-    const raw = typeof message === "string" ? message : message.toString();
-    const packet = JSON.parse(raw);
-    const { id, method, data } = packet;
+    let packet: any;
+    if (typeof message === "object" && message !== null && !Buffer.isBuffer(message)) {
+      packet = message;
+    } else {
+      const raw = typeof message === "string" ? message : message.toString();
+      packet = JSON.parse(raw);
+    }
+    if (!packet || typeof packet !== "object") return;
+    const { id, method, data = {} } = packet;
+
 
     // Delegate WebRTC requests first
     const handled = await handleWebRtcMessage(ws, id, method, data);
@@ -107,6 +114,24 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
           data: { participantId: ws.data.participantId, emoji: data.emoji },
         });
         sendResponse(ws, id, { acknowledged: true });
+        break;
+      }
+
+      case "meeting:updateSettings": {
+        broadcastToRoom(ws.data.meetingId!, {
+          event: "meeting:settingsUpdated",
+          data: { settings: data.settings },
+        });
+        sendResponse(ws, id, { updated: true });
+        break;
+      }
+
+      case "meeting:endForAll": {
+        broadcastToRoom(ws.data.meetingId!, {
+          event: "meeting:ended",
+          data: { meetingId: ws.data.meetingId, endedBy: ws.data.participantId },
+        });
+        sendResponse(ws, id, { ended: true });
         break;
       }
 

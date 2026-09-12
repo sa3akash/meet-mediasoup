@@ -14,7 +14,7 @@ export const s3Client = new S3Client({
 });
 
 export async function uploadToStorage(key: string, body: Buffer | Uint8Array, contentType: string): Promise<string> {
-  await s3Client.send(
+  await (s3Client as any).send(
     new PutObjectCommand({
       Bucket: S3_BUCKET,
       Key: key,

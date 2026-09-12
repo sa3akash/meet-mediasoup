@@ -1,4 +1,4 @@
-import type { RtpCodecCapability, TransportListenInfo, WorkerSettings } from "mediasoup/node/lib/types";
+import type { RouterRtpCodecCapability, TransportListenInfo, WorkerSettings } from "mediasoup/types";
 import os from "os";
 
 export const mediasoupConfig = {
@@ -55,7 +55,7 @@ export const mediasoupConfig = {
         clockRate: 90000,
         parameters: { "profile-id": 0 },
       },
-    ] as RtpCodecCapability[],
+    ] as RouterRtpCodecCapability[],
   },
 
   webRtcTransport: {

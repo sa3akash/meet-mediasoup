@@ -1,9 +1,7 @@
-import type { Consumer } from "mediasoup/node/lib/types";
+import type { Consumer } from "mediasoup/types";
+import type { LayerOptions } from "./types";
 
-export interface LayerOptions {
-  spatialLayer: number;
-  temporalLayer?: number;
-}
+export type { LayerOptions };
 
 class LayerManager {
   public async setPreferredLayers(consumer: Consumer, options: LayerOptions): Promise<void> {
@@ -18,7 +16,11 @@ class LayerManager {
 
   public async setMaxSpatialLayer(consumer: Consumer, spatialLayer: number): Promise<void> {
     if (consumer.type === "simulcast" || consumer.type === "svc") {
-      await consumer.setMaxSpatialLayer(spatialLayer);
+      if (typeof (consumer as any).setMaxSpatialLayer === "function") {
+        await (consumer as any).setMaxSpatialLayer(spatialLayer);
+      } else {
+        await consumer.setPreferredLayers({ spatialLayer });
+      }
     }
   }
 

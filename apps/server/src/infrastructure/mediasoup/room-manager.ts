@@ -1,4 +1,4 @@
-import type { RtpCapabilities, RtpParameters, DtlsParameters, MediaKind, Consumer } from "mediasoup/node/lib/types";
+import type { RtpCapabilities, RtpParameters, DtlsParameters, MediaKind, Consumer } from "mediasoup/types";
 import { routerBalancer } from "./router-balancer";
 import { audioObserverService } from "./audio-observer-service";
 import { layerManager, type LayerOptions } from "./layer-manager";

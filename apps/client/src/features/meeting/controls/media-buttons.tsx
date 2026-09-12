@@ -4,11 +4,12 @@ import { Mic, MicOff, Video, VideoOff, ScreenShare, Hand } from "lucide-react";
 import { useMediaStore } from "../../../stores/media-store";
 import { useMeetingStore } from "../../../stores/meeting-store";
 
-export function MediaButtons() {
+export function MediaButtons({ disableScreenShare }: { disableScreenShare?: boolean }) {
   const { isAudioMuted, isVideoMuted, isScreenSharing, toggleAudio, toggleVideo, setScreenSharing } = useMediaStore();
   const { isHandRaised, setHandRaised } = useMeetingStore();
 
   const handleScreenShare = async () => {
+    if (disableScreenShare) return;
     try {
       if (isScreenSharing) {
         setScreenSharing(false);
@@ -50,10 +51,15 @@ export function MediaButtons() {
 
       <button
         onClick={handleScreenShare}
+        disabled={disableScreenShare}
         className={`p-3.5 rounded-full transition-all duration-200 shadow-md ${
-          isScreenSharing ? "bg-blue-600 text-white" : "bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10"
+          disableScreenShare
+            ? "bg-neutral-800/40 text-neutral-600 cursor-not-allowed border border-white/5"
+            : isScreenSharing
+            ? "bg-blue-600 text-white"
+            : "bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10"
         }`}
-        title="Share screen"
+        title={disableScreenShare ? "Screen sharing disabled by host" : "Share screen"}
       >
         <ScreenShare className="w-5 h-5" />
       </button>

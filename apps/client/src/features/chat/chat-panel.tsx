@@ -15,15 +15,17 @@ interface Message {
 interface ChatPanelProps {
   onSendMessage: (content: string) => void;
   messages: Message[];
+  disableChat?: boolean;
+  disableFileShare?: boolean;
 }
 
-export function ChatPanel({ onSendMessage, messages }: ChatPanelProps) {
+export function ChatPanel({ onSendMessage, messages, disableChat, disableFileShare }: ChatPanelProps) {
   const { toggleChat } = useMeetingStore();
   const [input, setInput] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || disableChat) return;
     onSendMessage(input.trim());
     setInput("");
   };
@@ -73,23 +75,29 @@ export function ChatPanel({ onSendMessage, messages }: ChatPanelProps) {
         )}
       </div>
 
-      {/* Message Input Form */}
-      <form onSubmit={handleSubmit} className="p-3 border-t border-white/10 bg-neutral-900/50 flex items-center gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Send a message to everyone"
-          className="flex-1 bg-neutral-800 border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-        <button
-          type="submit"
-          disabled={!input.trim()}
-          className="p-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white transition-all shadow-md"
-        >
-          <Send className="w-4 h-4" />
-        </button>
-      </form>
+      {/* Message Input Form or Disabled Banner */}
+      {disableChat ? (
+        <div className="p-4 border-t border-white/10 bg-neutral-950/60 text-center text-xs text-neutral-400">
+          In-call chat is currently disabled by the host.
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="p-3 border-t border-white/10 bg-neutral-900/50 flex items-center gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Send a message to everyone"
+            className="flex-1 bg-neutral-800 border border-white/10 rounded-full px-4 py-2.5 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim()}
+            className="p-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white transition-all shadow-md"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </form>
+      )}
     </div>
   );
 }

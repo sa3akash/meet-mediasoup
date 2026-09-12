@@ -13,6 +13,7 @@ export const meetings = pgTable(
     slug: varchar("slug", { length: 50 }).notNull().unique(), // e.g. "abc-defg-hij"
     type: varchar("type", { length: 20 }).default("INSTANT").notNull(), // INSTANT, SCHEDULED, RECURRING, PERSONAL
     accessLevel: varchar("access_level", { length: 20 }).default("PUBLIC").notNull(), // PUBLIC, PRIVATE, INVITE_ONLY
+    passcode: varchar("passcode", { length: 32 }), // Passcode / PIN for Private meetings
     scheduledStartAt: timestamp("scheduled_start_at", { withTimezone: true }),
     scheduledEndAt: timestamp("scheduled_end_at", { withTimezone: true }),
     actualStartAt: timestamp("actual_start_at", { withTimezone: true }),

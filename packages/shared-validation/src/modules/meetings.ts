@@ -20,6 +20,8 @@ export const CreateMeetingSchema = z.object({
   description: z.string().max(1000).optional(),
   type: z.enum(["INSTANT", "SCHEDULED", "RECURRING", "PERSONAL"]).default("INSTANT"),
   accessLevel: z.enum(["PUBLIC", "PRIVATE", "INVITE_ONLY"]).default("PUBLIC"),
+  passcode: z.string().min(4, "Passcode must be at least 4 characters").max(32).optional(),
+  inviteEmails: z.array(z.string().email()).optional(),
   scheduledStartAt: z.string().datetime().optional(),
   scheduledEndAt: z.string().datetime().optional(),
   recurrenceRule: z.string().optional(), // e.g. "FREQ=DAILY;INTERVAL=1"
@@ -34,9 +36,17 @@ export type UpdateMeetingInput = z.infer<typeof UpdateMeetingSchema>;
 export const JoinMeetingSchema = z.object({
   displayName: z.string().min(2, "Name must be at least 2 characters").max(50),
   passcode: z.string().optional(),
+  email: z.string().email().optional(),
   avatarUrl: z.string().url().optional(),
 });
 export type JoinMeetingInput = z.infer<typeof JoinMeetingSchema>;
+
+export const VerifyMeetingAccessSchema = z.object({
+  passcode: z.string().optional(),
+  email: z.string().email().optional(),
+  userId: z.string().optional(),
+});
+export type VerifyMeetingAccessInput = z.infer<typeof VerifyMeetingAccessSchema>;
 
 export const CreateTemplateSchema = z.object({
   name: z.string().min(2, "Template name is required").max(100),

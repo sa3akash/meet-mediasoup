@@ -1,4 +1,4 @@
-import type { Transport, Producer } from "mediasoup-client/lib/types";
+import type { types } from "mediasoup-client";
 
 export class ConnectionRecoveryManager {
   private sendRequest: (method: string, data?: any) => Promise<any>;
@@ -7,8 +7,8 @@ export class ConnectionRecoveryManager {
     this.sendRequest = sendRequest;
   }
 
-  public bindTransportIceRecovery(transport: Transport): void {
-    transport.on("connectionstatechange", async (state) => {
+  public bindTransportIceRecovery(transport: types.Transport): void {
+    transport.on("connectionstatechange", async (state: string) => {
       if (state === "failed" || state === "disconnected") {
         console.warn(`[Recovery] Transport ${transport.id} ${state}, initiating ICE restart...`);
         try {
@@ -45,7 +45,7 @@ export class ConnectionRecoveryManager {
     };
   }
 
-  public setupDeviceHotplugRecovery(producers: Map<string, Producer>): () => void {
+  public setupDeviceHotplugRecovery(producers: Map<string, types.Producer>): () => void {
     const handleDeviceChange = async () => {
       console.log("[Recovery] Media device change detected (hotplug/unplug)");
       try {

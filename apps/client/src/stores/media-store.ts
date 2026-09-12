@@ -24,6 +24,8 @@ interface MediaState {
   setScreenStream: (stream: MediaStream | null) => void;
   toggleAudio: () => void;
   toggleVideo: () => void;
+  setAudioMuted: (muted: boolean) => void;
+  setVideoMuted: (muted: boolean) => void;
   setScreenSharing: (sharing: boolean) => void;
   setDevices: (audio: MediaDeviceInfo[], video: MediaDeviceInfo[]) => void;
   setSelectedDevices: (audioId?: string, videoId?: string) => void;
@@ -80,6 +82,24 @@ export const useMediaStore = create<MediaState>((set, get) => ({
         set({ isVideoMuted: !isVideoMuted });
       }
     }
+  },
+
+  setAudioMuted: (muted) => {
+    const { localStream } = get();
+    if (localStream) {
+      const track = localStream.getAudioTracks()[0];
+      if (track) track.enabled = !muted;
+    }
+    set({ isAudioMuted: muted });
+  },
+
+  setVideoMuted: (muted) => {
+    const { localStream } = get();
+    if (localStream) {
+      const track = localStream.getVideoTracks()[0];
+      if (track) track.enabled = !muted;
+    }
+    set({ isVideoMuted: muted });
   },
 
   setScreenSharing: (isScreenSharing) => set({ isScreenSharing }),

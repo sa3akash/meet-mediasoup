@@ -5,7 +5,14 @@ import { revalidatePath } from "next/cache";
 
 const API_BASE = process.env.API_URL || "http://localhost:4000";
 
-export async function createInstantMeetingAction(hostId = "0191eb70-0000-7000-8000-000000000001") {
+export async function createInstantMeetingAction(
+  hostIdOrFormData?: string | FormData,
+  _formData?: FormData
+) {
+  const hostId = typeof hostIdOrFormData === "string" 
+    ? hostIdOrFormData 
+    : "0191eb70-0000-7000-8000-000000000001";
+
   let slug = "";
   try {
     const res = await fetch(`${API_BASE}/api/meetings`, {
@@ -35,6 +42,12 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
   const description = (formData.get("description") as string) || "";
   const type = (formData.get("type") as string) || "SCHEDULED";
   const accessLevel = (formData.get("accessLevel") as string) || "PUBLIC";
+  const passcode = (formData.get("passcode") as string) || undefined;
+  const rawInvites = (formData.get("inviteEmails") as string) || "";
+  const inviteEmails = rawInvites
+    ? rawInvites.split(/[,;\n]/).map((e) => e.trim()).filter((e) => e.length > 0)
+    : undefined;
+
   const scheduledStartAt = formData.get("scheduledStartAt") as string;
   const scheduledEndAt = formData.get("scheduledEndAt") as string;
   const recurrenceRule = formData.get("recurrenceRule") as string;
@@ -49,6 +62,7 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
     disableFileShare: formData.get("disableFileShare") === "on",
     disableReactions: formData.get("disableReactions") === "on",
     lockMeeting: formData.get("lockMeeting") === "on",
+    allowGuestUsers: formData.get("allowGuestUsers") !== "off",
   };
 
   let createdSlug = "";
@@ -62,6 +76,8 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
         description,
         type,
         accessLevel,
+        passcode,
+        inviteEmails,
         scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt).toISOString() : undefined,
         scheduledEndAt: scheduledEndAt ? new Date(scheduledEndAt).toISOString() : undefined,
         recurrenceRule: recurrenceRule || undefined,
@@ -83,6 +99,25 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
     redirect(`/meeting/${createdSlug}`);
   }
   return { success: true, slug: createdSlug };
+}
+
+export async function verifyMeetingAccessAction(
+  slug: string,
+  passcode?: string,
+  email?: string,
+  userId?: string
+) {
+  try {
+    const res = await fetch(`${API_BASE}/api/meetings/code/${slug}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passcode, email, userId }),
+      cache: "no-store",
+    });
+    return await res.json();
+  } catch {
+    return { allowed: false, reason: "NETWORK_ERROR", message: "Verification server unavailable" };
+  }
 }
 
 export async function joinMeetingByCodeAction(formData: FormData) {

@@ -4,6 +4,7 @@ import { swagger } from "@elysiajs/swagger";
 import { authRoutes } from "./modules/auth";
 import { meetingRoutes } from "./modules/meetings";
 import { userRoutes } from "./modules/users";
+import { webrtcRoutes } from "./modules/webrtc";
 import { workerPool } from "./infrastructure/mediasoup/worker-pool";
 import {
   handleSocketOpen,
@@ -31,7 +32,7 @@ const app = new Elysia()
         description: "Google Meet Style WebRTC & Conferencing Platform Backend",
       },
     },
-  }))
+  }) as any)
   // Health & Readiness checks
   .get("/health", () => ({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() }))
   .get("/ready", () => ({ ready: true }))
@@ -39,16 +40,17 @@ const app = new Elysia()
   .use(authRoutes)
   .use(meetingRoutes)
   .use(userRoutes)
+  .use(webrtcRoutes)
   // Native WebSocket Signaling Endpoint
   .ws("/ws", {
-    open(ws) {
-      handleSocketOpen(ws as any);
+    open(ws: any) {
+      handleSocketOpen(ws);
     },
-    message(ws, message) {
-      handleSocketMessage(ws as any, message);
+    message(ws: any, message: any) {
+      handleSocketMessage(ws, message);
     },
-    close(ws) {
-      handleSocketClose(ws as any);
+    close(ws: any) {
+      handleSocketClose(ws);
     },
   })
   .listen(process.env.PORT || 4000);

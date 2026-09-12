@@ -1,6 +1,6 @@
-import type { RtpEncodingParameters } from "mediasoup-client/lib/types";
+import type { types } from "mediasoup-client";
 
-export function getSimulcastEncodings(): RtpEncodingParameters[] {
+export function getSimulcastEncodings(): types.RtpEncodingParameters[] {
   return [
     {
       rid: "r0",
@@ -23,7 +23,7 @@ export function getSimulcastEncodings(): RtpEncodingParameters[] {
   ];
 }
 
-export function getSvcEncodings(codec: "VP9" | "AV1" = "VP9"): RtpEncodingParameters[] {
+export function getSvcEncodings(codec: "VP9" | "AV1" = "VP9"): types.RtpEncodingParameters[] {
   return [
     {
       maxBitrate: 2500000,
@@ -33,7 +33,7 @@ export function getSvcEncodings(codec: "VP9" | "AV1" = "VP9"): RtpEncodingParame
   ];
 }
 
-export function getVideoEncodings(codecMimeType?: string): RtpEncodingParameters[] {
+export function getVideoEncodings(codecMimeType?: string): types.RtpEncodingParameters[] {
   const mime = codecMimeType?.toLowerCase() || "";
   if (mime.includes("vp9") || mime.includes("av1")) {
     return getSvcEncodings(mime.includes("av1") ? "AV1" : "VP9");

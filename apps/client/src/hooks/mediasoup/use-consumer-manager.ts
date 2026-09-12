@@ -1,13 +1,13 @@
 import { useRef, useCallback } from "react";
-import type { Device, Transport, Consumer } from "mediasoup-client/lib/types";
+import type { types } from "mediasoup-client";
 import { useMediaStore } from "../../stores/media-store";
 
 export function useConsumerManager(
-  deviceRef: React.RefObject<Device | null>,
-  recvTransportRef: React.RefObject<Transport | null>,
+  deviceRef: React.RefObject<types.Device | null>,
+  recvTransportRef: React.RefObject<types.Transport | null>,
   sendRequest: (method: string, data?: any) => Promise<any>
 ) {
-  const consumersRef = useRef<Map<string, Consumer>>(new Map());
+  const consumersRef = useRef<Map<string, types.Consumer>>(new Map());
   const { setRemoteStream } = useMediaStore();
 
   const consumeProducer = useCallback(
@@ -46,5 +46,5 @@ export function useConsumerManager(
     consumersRef.current.clear();
   }, []);
 
-  return { consumeProducer, closeAllConsumers };
+  return { consumeProducer, closeAllConsumers, consumersRef };
 }

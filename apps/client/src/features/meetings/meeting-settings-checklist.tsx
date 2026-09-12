@@ -14,7 +14,7 @@ const SETTINGS_LIST: SettingItem[] = [
   { name: "waitingRoomEnabled", label: "Waiting Room", description: "Participants need host approval to enter", icon: Shield },
   { name: "autoRecording", label: "Auto Recording", description: "Automatically start recording on meeting start", icon: Disc },
   { name: "muteOnJoin", label: "Mute On Join", description: "Participants enter with microphone muted", defaultChecked: true, icon: MicOff },
-  { name: "cameraOffOnJoin", label: "Camera Off On Join", description: "Participants join with video turned off", icon: VideoOff },
+  { name: "cameraOffOnJoin", label: "Disable Camera On Join", description: "Participants join with video turned off", icon: VideoOff },
   { name: "disableScreenShare", label: "Disable Screen Share", description: "Restrict screen sharing to host only", icon: MonitorOff },
   { name: "disableChat", label: "Disable Chat", description: "Disallow text messages during meeting", icon: MessageSquareOff },
   { name: "disableFileShare", label: "Disable File Share", description: "Prevent file uploads in the chat", icon: FileText },
@@ -22,13 +22,14 @@ const SETTINGS_LIST: SettingItem[] = [
   { name: "lockMeeting", label: "Lock Meeting", description: "Block new participants from entering room", icon: Lock },
 ];
 
-export function MeetingSettingsChecklist() {
+export function MeetingSettingsChecklist({ defaultValues }: { defaultValues?: Record<string, boolean> }) {
   return (
     <div className="space-y-2.5">
       <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Security & Meeting Controls</h4>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {SETTINGS_LIST.map((item) => {
           const Icon = item.icon;
+          const isChecked = defaultValues ? (defaultValues[item.name] ?? false) : item.defaultChecked;
           return (
             <label
               key={item.name}
@@ -46,7 +47,7 @@ export function MeetingSettingsChecklist() {
               <input
                 type="checkbox"
                 name={item.name}
-                defaultChecked={item.defaultChecked}
+                defaultChecked={isChecked}
                 className="w-4 h-4 mt-1 rounded bg-neutral-800 border-white/20 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-0 cursor-pointer accent-indigo-600 shrink-0"
               />
             </label>

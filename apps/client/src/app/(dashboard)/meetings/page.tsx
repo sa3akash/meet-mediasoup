@@ -4,6 +4,7 @@ import { Video, CalendarPlus } from "lucide-react";
 import { createInstantMeetingAction } from "../../../actions/meeting.actions";
 import { PersonalRoomCard } from "../../../features/meetings/personal-room-card";
 import { MeetingTemplateCard } from "../../../features/meetings/meeting-template-card";
+import { CreateTemplateModal } from "../../../features/meetings/create-template-modal";
 import { MeetingsList } from "../../../features/meetings/meetings-list";
 
 export const metadata: Metadata = {
@@ -28,7 +29,36 @@ async function getMeetingsData(userId: string) {
     return {
       meetings: meetingsData.meetings || [],
       personalRoom: pmrData.personalRoom || { slug: "pmr-shakil" },
-      templates: templatesData.templates || [],
+      templates: templatesData.templates?.length ? templatesData.templates : [
+        {
+          id: "tpl-1",
+          name: "All-Hands Webinar",
+          description: "Mute on join, auto cloud recording enabled, chat restricted.",
+          isDefault: true,
+          settings: { waitingRoomEnabled: true, autoRecording: true, muteOnJoin: true, disableChat: false },
+        },
+        {
+          id: "tpl-2",
+          name: "Interactive Workshop",
+          description: "Open chat, reactions allowed, waiting room disabled for fast entry.",
+          isDefault: false,
+          settings: { waitingRoomEnabled: false, autoRecording: false, muteOnJoin: false, disableChat: false },
+        },
+        {
+          id: "tpl-3",
+          name: "Confidential Board Sync",
+          description: "Waiting room on, screen & file share restricted to host.",
+          isDefault: false,
+          settings: { waitingRoomEnabled: true, autoRecording: true, muteOnJoin: true, disableScreenShare: true, disableFileShare: true },
+        },
+        {
+          id: "tpl-4",
+          name: "Quick 1-on-1 Sync",
+          description: "Lightweight, open interaction for personal office hours.",
+          isDefault: false,
+          settings: { waitingRoomEnabled: false, autoRecording: false, muteOnJoin: false, disableChat: false },
+        },
+      ],
     };
   } catch {
     return {
@@ -46,6 +76,20 @@ async function getMeetingsData(userId: string) {
           id: "tpl-2",
           name: "Interactive Workshop",
           description: "Open chat, reactions allowed, waiting room disabled for fast entry.",
+          isDefault: false,
+          settings: { waitingRoomEnabled: false, autoRecording: false, muteOnJoin: false, disableChat: false },
+        },
+        {
+          id: "tpl-3",
+          name: "Confidential Board Sync",
+          description: "Waiting room on, screen & file share restricted to host.",
+          isDefault: false,
+          settings: { waitingRoomEnabled: true, autoRecording: true, muteOnJoin: true, disableScreenShare: true, disableFileShare: true },
+        },
+        {
+          id: "tpl-4",
+          name: "Quick 1-on-1 Sync",
+          description: "Lightweight, open interaction for personal office hours.",
           isDefault: false,
           settings: { waitingRoomEnabled: false, autoRecording: false, muteOnJoin: false, disableChat: false },
         },
@@ -67,7 +111,10 @@ export default async function MeetingsPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <form action={createInstantMeetingAction.bind(null, userId)}>
+          <form action={async () => {
+            "use server";
+            await createInstantMeetingAction(userId);
+          }}>
             <button
               type="submit"
               className="py-3 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/25 active:scale-95"
@@ -94,8 +141,11 @@ export default async function MeetingsPage() {
 
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-white">Quick Start from Template</h2>
-            <span className="text-neutral-500 text-xs">{templates.length} templates available</span>
+            <div>
+              <h2 className="text-base font-semibold text-white">Quick Start from Template</h2>
+              <span className="text-neutral-500 text-xs">{templates.length} templates available</span>
+            </div>
+            <CreateTemplateModal />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {templates.map((tpl: any) => (

@@ -22,6 +22,8 @@ export interface MeetingDTO {
   slug: string;
   type: MeetingType;
   accessLevel: MeetingAccessLevel;
+  passcode?: string | null;
+  inviteEmails?: string[];
   scheduledStartAt?: string | null;
   scheduledEndAt?: string | null;
   actualStartAt?: string | null;
@@ -29,6 +31,11 @@ export interface MeetingDTO {
   status: MeetingStatus;
   recurrenceRule?: string | null;
   settings?: MeetingSettings;
+  host?: {
+    id: string;
+    name: string;
+    avatarUrl?: string | null;
+  };
   createdAt: string;
   updatedAt: string;
 }

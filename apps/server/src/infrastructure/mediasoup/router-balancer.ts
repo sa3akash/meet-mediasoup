@@ -1,4 +1,4 @@
-import type { Router, Worker } from "mediasoup/node/lib/types";
+import type { Router, Worker } from "mediasoup/types";
 import { workerPool } from "./worker-pool";
 import { mediasoupConfig } from "./config";
 
@@ -54,6 +54,18 @@ class RouterBalancer {
     }
     this.roomRouters.delete(roomId);
   }
+
+  public getActiveRooms(): string[] {
+    return Array.from(this.roomRouters.keys());
+  }
+
+  public getRoomDistribution(): Array<{ roomId: string; workerPid: number }> {
+    return Array.from(this.roomRouters.entries()).map(([roomId, entry]) => ({
+      roomId,
+      workerPid: entry.workerPid,
+    }));
+  }
 }
 
 export const routerBalancer = new RouterBalancer();
+

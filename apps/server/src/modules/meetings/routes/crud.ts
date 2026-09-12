@@ -1,6 +1,6 @@
 import { Elysia, t } from "elysia";
 import { db } from "../../../infrastructure/database";
-import { meetings, meetingSettings } from "../../../infrastructure/database/schema";
+import { meetings, meetingSettings, meetingInvites } from "../../../infrastructure/database/schema";
 import { generateUUIDv7, generateMeetingCode } from "@meet/shared-utils";
 import { eq, desc, and } from "drizzle-orm";
 
@@ -13,6 +13,8 @@ export const crudRoutes = new Elysia()
         description,
         type = "INSTANT",
         accessLevel = "PUBLIC",
+        passcode,
+        inviteEmails,
         hostId,
         scheduledStartAt,
         scheduledEndAt,
@@ -33,6 +35,7 @@ export const crudRoutes = new Elysia()
           slug,
           type,
           accessLevel,
+          passcode: passcode || null,
           status: type === "INSTANT" ? "ACTIVE" : "SCHEDULED",
           actualStartAt: type === "INSTANT" ? new Date() : null,
           scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt) : null,
@@ -57,6 +60,25 @@ export const crudRoutes = new Elysia()
         maxParticipants: settings?.maxParticipants ?? 100,
       });
 
+      // Insert invites if specified for INVITE_ONLY or attendee list
+      if (inviteEmails && inviteEmails.length > 0) {
+        const expiresAt = scheduledEndAt ? new Date(scheduledEndAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        for (const email of inviteEmails) {
+          if (email && email.trim()) {
+            await db.insert(meetingInvites).values({
+              id: generateUUIDv7(),
+              meetingId: newMeeting.id,
+              email: email.trim().toLowerCase(),
+              invitedBy: hostId,
+              role: "PARTICIPANT",
+              token: generateUUIDv7().replace(/-/g, ""),
+              status: "PENDING",
+              expiresAt,
+            });
+          }
+        }
+      }
+
       return {
         meeting: newMeeting,
         joinUrl: `/meeting/${newMeeting.slug}`,
@@ -69,6 +91,8 @@ export const crudRoutes = new Elysia()
         description: t.Optional(t.String()),
         type: t.Optional(t.String()),
         accessLevel: t.Optional(t.String()),
+        passcode: t.Optional(t.String()),
+        inviteEmails: t.Optional(t.Array(t.String())),
         scheduledStartAt: t.Optional(t.String()),
         scheduledEndAt: t.Optional(t.String()),
         recurrenceRule: t.Optional(t.String()),
@@ -107,6 +131,79 @@ export const crudRoutes = new Elysia()
     }
     return { meeting };
   })
+  .post(
+    "/code/:slug/verify",
+    async ({ params, body, set }) => {
+      const { passcode, email, userId } = body;
+      const meeting = await db.query.meetings.findFirst({
+        where: eq(meetings.slug, params.slug),
+        with: {
+          settings: true,
+          host: {
+            columns: { id: true, name: true, avatarUrl: true },
+          },
+        },
+      });
+
+      if (!meeting) {
+        set.status = 404;
+        return { allowed: false, reason: "NOT_FOUND", message: "Meeting not found" };
+      }
+
+      if (meeting.status === "CANCELLED") {
+        return { allowed: false, reason: "CANCELLED", message: "This meeting has been cancelled by host" };
+      }
+
+      if (meeting.status === "ENDED") {
+        return { allowed: false, reason: "ENDED", message: "This meeting has ended" };
+      }
+
+      const isHost = userId && meeting.hostId === userId;
+
+      // Check locked meeting
+      if (meeting.settings?.lockMeeting && !isHost) {
+        return { allowed: false, reason: "LOCKED", message: "This meeting is locked by the host" };
+      }
+
+      // Check passcode for PRIVATE meetings
+      if (meeting.accessLevel === "PRIVATE" && !isHost) {
+        if (!passcode || passcode !== meeting.passcode) {
+          return { allowed: false, reason: "INVALID_PASSCODE", message: "Passcode is incorrect or required" };
+        }
+      }
+
+      // Check invite for INVITE_ONLY meetings
+      if (meeting.accessLevel === "INVITE_ONLY" && !isHost) {
+        if (!email) {
+          return { allowed: false, reason: "EMAIL_REQUIRED", message: "Email is required for invite-only meetings" };
+        }
+
+        const invite = await db.query.meetingInvites.findFirst({
+          where: and(
+            eq(meetingInvites.meetingId, meeting.id),
+            eq(meetingInvites.email, email.trim().toLowerCase())
+          ),
+        });
+
+        if (!invite) {
+          return { allowed: false, reason: "NOT_INVITED", message: "You are not on the guest list for this meeting" };
+        }
+      }
+
+      return {
+        allowed: true,
+        waitingRoom: !!meeting.settings?.waitingRoomEnabled && !isHost,
+        meeting,
+      };
+    },
+    {
+      body: t.Object({
+        passcode: t.Optional(t.String()),
+        email: t.Optional(t.String()),
+        userId: t.Optional(t.String()),
+      }),
+    }
+  )
   .get("/user/:userId", async ({ params }) => {
     const list = await db.query.meetings.findMany({
       where: eq(meetings.hostId, params.userId),
