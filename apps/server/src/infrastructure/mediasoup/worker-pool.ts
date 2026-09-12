@@ -8,14 +8,28 @@ import path from "path";
 export type { WorkerMetric };
 
 function hasNativeWorkerBinary(): boolean {
-  if (process.env.MEDIASOUP_WORKER_BIN && fs.existsSync(process.env.MEDIASOUP_WORKER_BIN)) {
-    return true;
+  const candidatePaths = [
+    process.env.MEDIASOUP_WORKER_BIN,
+    "/app/apps/server/node_modules/mediasoup/worker/out/Release/mediasoup-worker",
+    "/app/node_modules/mediasoup/worker/out/Release/mediasoup-worker",
+    path.resolve(process.cwd(), "apps/server/node_modules/mediasoup/worker/out/Release/mediasoup-worker"),
+    path.resolve(process.cwd(), "node_modules/mediasoup/worker/out/Release/mediasoup-worker"),
+    path.resolve(__dirname, "../../../../../node_modules/mediasoup/worker/out/Release/mediasoup-worker"),
+    path.resolve(__dirname, "../../../node_modules/mediasoup/worker/out/Release/mediasoup-worker"),
+  ];
+
+  for (const candidate of candidatePaths) {
+    if (!candidate) continue;
+    if (fs.existsSync(candidate)) {
+      process.env.MEDIASOUP_WORKER_BIN = candidate;
+      return true;
+    }
+    if (fs.existsSync(`${candidate}.exe`)) {
+      process.env.MEDIASOUP_WORKER_BIN = `${candidate}.exe`;
+      return true;
+    }
   }
-  const defaultPath = path.resolve(
-    process.cwd(),
-    "node_modules/mediasoup/worker/out/Release/mediasoup-worker"
-  );
-  return fs.existsSync(defaultPath) || fs.existsSync(`${defaultPath}.exe`);
+  return false;
 }
 
 class WorkerPool {
@@ -32,7 +46,7 @@ class WorkerPool {
     }
 
     const count = mediasoupConfig.numWorkers;
-    console.log(`[Mediasoup] Initializing ${count} native worker instances...`);
+    console.log(`[Mediasoup] Initializing ${count} native worker instances using ${process.env.MEDIASOUP_WORKER_BIN}...`);
 
     for (let i = 0; i < count; i++) {
       await this.spawnWorker();
@@ -40,7 +54,10 @@ class WorkerPool {
   }
 
   private async spawnWorker(): Promise<Worker> {
-    const worker = await mediasoup.createWorker(mediasoupConfig.workerSettings);
+    const worker = await mediasoup.createWorker({
+      ...mediasoupConfig.workerSettings,
+      workerBin: process.env.MEDIASOUP_WORKER_BIN,
+    });
     this.workers.push(worker);
     this.workerRoutersCount.set(worker.pid, 0);
 

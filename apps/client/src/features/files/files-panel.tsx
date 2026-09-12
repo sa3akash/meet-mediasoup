@@ -78,7 +78,8 @@ export const FilesPanel: React.FC<FilesPanelProps> = ({
       formData.append("file", selectedFile);
       formData.append("displayName", "Me");
 
-      const res = await fetch(`http://localhost:4000/api/files/${meetingId}/upload`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const res = await fetch(`${apiBase}/api/files/${meetingId}/upload`, {
         method: "POST",
         body: formData,
       });

@@ -1,4 +1,3 @@
-import "reflect-metadata";
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { swagger } from "@elysiajs/swagger";
@@ -8,6 +7,8 @@ import { userRoutes } from "./modules/users";
 import { webrtcRoutes } from "./modules/webrtc";
 import { fileRoutes } from "./modules/files/file-routes";
 import { notificationRoutes } from "./modules/notifications/notification-routes";
+import { streamingRoutes } from "./modules/streaming";
+import { whiteboardRoutes } from "./modules/whiteboards";
 import { workerPool } from "./infrastructure/mediasoup/worker-pool";
 import { redis } from "./infrastructure/redis";
 import {
@@ -64,6 +65,8 @@ const app = new Elysia()
   .use(webrtcRoutes)
   .use(fileRoutes)
   .use(notificationRoutes)
+  .use(streamingRoutes)
+  .use(whiteboardRoutes)
   // Native WebSocket Signaling Endpoint
   .ws("/ws", {
     open(ws: any) {

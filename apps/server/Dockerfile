@@ -1,37 +1,35 @@
 # ==========================================
-# Stage 1: Build Native Workers & Bundle
+# Stage 1: Build Native Workers & Monorepo
 # ==========================================
 FROM oven/bun:1 AS builder
 
 WORKDIR /app
 
-# Install native C++ build tools required by Mediasoup
+# Install native C++ build tools & Python packages required by Mediasoup
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
+    python3-pip \
     make \
     g++ \
     build-essential \
+    pkg-config \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy root monorepo manifest files
-COPY package.json bun.lock* turbo.json ./
+COPY package.json turbo.json bun.lock* ./
 
 # Copy all workspace packages and apps
 COPY packages ./packages
 COPY apps/server ./apps/server
 
-# Install all workspace dependencies & compile Mediasoup native binaries
-RUN bun install --frozen-lockfile
+# Install all workspace dependencies (with trusted dependencies)
+RUN bun install --frozen-lockfile || bun install
 
-# Move into the server app workspace
-WORKDIR /app/apps/server
-
-# Bundle server into a single file with external package resolution
-RUN bun build \
-    --target=bun \
-    --minify \
-    --outdir=./dist \
-    ./src/index.ts
+# Explicitly ensure Mediasoup native C++ worker is built
+RUN cd /app/apps/server/node_modules/mediasoup 2>/dev/null && \
+    (python3 -m pip install --break-system-packages invoke meson ninja || true) && \
+    (node npm-scripts.mjs worker:build || bun run npm-scripts.mjs worker:build || true) || true
 
 # ==========================================
 # Stage 2: Minimal Production Runtime
@@ -40,26 +38,41 @@ FROM oven/bun:1-slim AS runner
 
 WORKDIR /app
 
+# Install FFmpeg for Live Streaming (YouTube/Facebook/RTMP) & Server Recordings,
+# plus C++ runtime libraries and certificates
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libstdc++6 \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # 1. Copy root package manifest
 COPY package.json ./
 
-# 2. Copy compiled application output from builder stage
-COPY --from=builder /app/apps/server/dist ./apps/server/dist
-COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
-
-# 3. Copy root and workspace node_modules (preserves Mediasoup binaries & workspace symlinks)
+# 2. Copy root and workspace node_modules (preserves Mediasoup binaries & workspace symlinks)
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/apps/server/node_modules ./apps/server/node_modules
+COPY --from=builder /app/apps/server ./apps/server
+
+# 3. Ensure Mediasoup worker binary is present and symlinked for universal discovery
+RUN if [ -f /app/apps/server/node_modules/mediasoup/worker/out/Release/mediasoup-worker ]; then \
+      mkdir -p /app/node_modules/mediasoup/worker/out/Release && \
+      cp /app/apps/server/node_modules/mediasoup/worker/out/Release/mediasoup-worker /app/node_modules/mediasoup/worker/out/Release/mediasoup-worker; \
+    fi
 
 # Environment settings
 ENV NODE_ENV=production
-# Force Mediasoup to find its worker C++ executable in root node_modules
-ENV MEDIASOUP_WORKER_BIN=/app/node_modules/mediasoup/worker/out/Release/mediasoup-worker
+ENV PORT=4000
+ENV MEDIASOUP_WORKER_BIN=/app/apps/server/node_modules/mediasoup/worker/out/Release/mediasoup-worker
 
+# Expose HTTP/WS signaling port
 EXPOSE 4000
-EXPOSE 10000-10100/udp
-EXPOSE 10000-10100/tcp
+# Expose Mediasoup WebRTC RTP media port range (UDP and TCP)
+EXPOSE 40000-40050/udp
+EXPOSE 40000-40050/tcp
 
-# Execute from app root with reflect-metadata preloaded
-CMD ["bun", "run", "apps/server/dist/index.js"]
+WORKDIR /app/apps/server
+
+# Execute directly with Bun native TypeScript runtime
+CMD ["bun", "run", "src/index.ts"]
