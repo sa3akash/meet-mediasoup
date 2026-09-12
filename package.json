@@ -10,7 +10,7 @@
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck",
+    "typecheck": "turbo run typecheck --continue",
     "test": "turbo run test",
     "db:generate": "bun --filter server run db:generate",
     "db:migrate": "bun --filter server run db:migrate",
