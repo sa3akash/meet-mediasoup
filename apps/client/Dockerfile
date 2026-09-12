@@ -28,20 +28,22 @@ FROM oven/bun:1 AS runner
 WORKDIR /app
 
 # Install curl for the HEALTHCHECK mechanism
-RUN apt-get update && apt-get install -y curl && rm -rf /lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Copy static assets and standalone build output from the builder stage
-COPY --from=builder --chown=bun:bun /app/apps/client/public ./public
+# Copy standalone build output (contains app structure)
 COPY --from=builder --chown=bun:bun /app/apps/client/.next/standalone ./
-COPY --from=builder --chown=bun:bun /app/apps/client/.next/static ./.next/static
+
+# Copy static assets into the nested app location where Next.js expects them
+COPY --from=builder --chown=bun:bun /app/apps/client/public ./apps/client/public
+COPY --from=builder --chown=bun:bun /app/apps/client/.next/static ./apps/client/.next/static
 
 # Set correct permissions for Next.js cache directory
-RUN mkdir -p .next && chown bun:bun .next
+RUN mkdir -p apps/client/.next && chown -R bun:bun apps/client/.next
 
 USER bun
 
@@ -50,4 +52,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-CMD ["bun", "server.js"]
+# Launch server.js from the nested monorepo route
+CMD ["bun", "apps/client/server.js"]

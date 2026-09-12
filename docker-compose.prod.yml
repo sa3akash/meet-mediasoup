@@ -1,4 +1,4 @@
-name: Meet
+name: meet
 
 services:
   postgres:
@@ -46,6 +46,11 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   mailhog:
     image: mailhog/mailhog:latest
@@ -68,7 +73,32 @@ services:
     volumes:
       - ./docker/coturn/turnserver.conf:/etc/turnserver.conf:ro
 
-  
+  server:
+    image: ghcr.io/sa3akash/meet-server:latest
+    container_name: meet_server
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - ./apps/server/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  client:
+    image: ghcr.io/sa3akash/meet-client:latest
+    container_name: meet_client
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./apps/client/.env
+    depends_on:
+      - server
 
 volumes:
   postgres_data:

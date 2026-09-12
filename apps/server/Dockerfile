@@ -5,29 +5,29 @@ FROM oven/bun:1-debian AS builder
 
 WORKDIR /app
 
-# Install minimal native build tools for Mediasoup (C++ worker compilation)
+# Install minimal native build tools for Mediasoup C++ worker compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy configuration files
+# Copy workspace dependencies configuration
 COPY package.json turbo.json bun.lock* ./
 COPY packages ./packages
 COPY apps/server ./apps/server
 
-# Install dependencies and compile native binaries
+# Install dependencies and compile native C++ binaries
 RUN bun install --frozen-lockfile
 
 WORKDIR /app/apps/server
 
-# Build production bundle (transpiled JS, keeping node_modules intact for native bindings)
+# Build production bundle using correct Bun output flags
 RUN bun build \
     --minify-whitespace \
     --minify-syntax \
     --target=bun \
-    --outdir ./dist \
+    --outfile=./dist/index.js \
     src/index.ts
 
 # ==========================================
@@ -37,25 +37,17 @@ FROM oven/bun:1-distroless AS runner
 
 WORKDIR /app
 
-# Copy the transpiled application code
+# Copy transpiled code
 COPY --from=builder /app/apps/server/dist ./dist
 
-# CRITICAL: Copy Mediasoup native workers and node_modules required for runtime bindings
-COPY --from=builder /app/apps/server/node_modules ./node_modules
+# Copy Mediasoup native worker binaries and node_modules
+COPY --from=builder /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=builder /app/node_modules ./node_modules
 
 ENV NODE_ENV=production
 
-# Mediasoup requires a vast range of RTC ports. 
-# While EXPOSE is informational, documentation of the core ports is best practice.
 EXPOSE 4000
 EXPOSE 10000-10100/udp
 EXPOSE 10000-10100/tcp
-
-# Use Bun's built-in script runner for a shell-less health check if using distroless,
-# or handle health checks at the orchestrator level (Kubernetes/ECS).
-# If docker-native healthcheck is required, switch runner to `oven/bun:1-debian` and install curl.
-HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
-  CMD ["bun", "./dist/healthcheck.js"]
 
 CMD ["bun", "run", "./dist/index.js"]

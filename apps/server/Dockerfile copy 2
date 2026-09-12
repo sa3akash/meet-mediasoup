@@ -1,50 +1,61 @@
-# Production Dockerfile for Enterprise Meet Server (Bun + Native Mediasoup)
+# ==========================================
+# Stage 1: Build & Compile Native Workers
+# ==========================================
 FROM oven/bun:1-debian AS builder
 
 WORKDIR /app
 
-# Install native dependencies required for Mediasoup C++ worker compilation
+# Install minimal native build tools for Mediasoup (C++ worker compilation)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
-    python3-pip \
     make \
     g++ \
-    clang \
-    pkg-config \
-    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy monorepo configurations and workspace files
+# Copy configuration files
 COPY package.json turbo.json bun.lock* ./
 COPY packages ./packages
 COPY apps/server ./apps/server
 
-# Install dependencies (compiling Mediasoup native workers for Linux)
-RUN bun install
+# Install dependencies and compile native binaries
+RUN bun install --frozen-lockfile
 
 WORKDIR /app/apps/server
 
-# Build production bundle
+# Build production bundle (transpiled JS, keeping node_modules intact for native bindings)
 RUN bun build \
-	--compile \
-	--minify-whitespace \
-	--minify-syntax \
-	--outfile server \
-	src/index.ts
+    --minify-whitespace \
+    --minify-syntax \
+    --target=bun \
+    --outdir ./dist \
+    src/index.ts
 
-# Production Runtime Stage
-FROM gcr.io/distroless/base
+# ==========================================
+# Stage 2: Minimal Production Runtime
+# ==========================================
+FROM oven/bun:1-distroless AS runner
 
 WORKDIR /app
 
-COPY --from=builder /app/server server
+# Copy the transpiled application code
+COPY --from=builder /app/apps/server/dist ./dist
+
+# CRITICAL: Copy Mediaasoup native workers and node_modules required for runtime bindings
+COPY --from=builder /app/apps/server/node_modules ./node_modules
+COPY --from=builder /app/node_modules ./node_modules
 
 ENV NODE_ENV=production
 
-# Health check probe for container runtime
-HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
-  CMD curl -f http://localhost:4000/health/live || exit 1
-
-CMD ["./server"]
-
+# Mediasoup requires a vast range of RTC ports. 
+# While EXPOSE is informational, documentation of the core ports is best practice.
 EXPOSE 4000
+EXPOSE 10000-10100/udp
+EXPOSE 10000-10100/tcp
+
+# Use Bun's built-in script runner for a shell-less health check if using distroless,
+# or handle health checks at the orchestrator level (Kubernetes/ECS).
+# If docker-native healthcheck is required, switch runner to `oven/bun:1-debian` and install curl.
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+  CMD ["bun", "./dist/healthcheck.js"]
+
+CMD ["bun", "run", "./dist/index.js"]
