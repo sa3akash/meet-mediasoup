@@ -5,6 +5,7 @@ import { db } from "../../../infrastructure/database";
 import { users, sessions } from "../../../infrastructure/database/schema";
 import { eq } from "drizzle-orm";
 import { sendPasswordResetEmail } from "../../../infrastructure/mailer";
+import { apiDoc, SwaggerTags } from "../../../infrastructure/swagger/swagger-helpers";
 
 const JWT_SECRET = process.env.JWT_SECRET || "enterprise-super-secret-jwt-key";
 
@@ -29,6 +30,11 @@ export const passwordRouter = new Elysia()
       return { message: "If an account exists with this email, a password reset link has been dispatched." };
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.AUTH,
+        summary: "Request password reset",
+        description: "Dispatches a password reset link to user's email if registered.",
+      }),
       body: t.Object({
         email: t.String(),
       }),
@@ -65,6 +71,11 @@ export const passwordRouter = new Elysia()
       }
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.AUTH,
+        summary: "Reset password with token",
+        description: "Resets password using verification token and revokes all active sessions.",
+      }),
       body: t.Object({
         token: t.String(),
         newPassword: t.String(),
@@ -109,6 +120,11 @@ export const passwordRouter = new Elysia()
       }
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.AUTH,
+        summary: "Change account password",
+        description: "Updates password for currently authenticated user.",
+      }),
       body: t.Object({
         currentPassword: t.String(),
         newPassword: t.String(),

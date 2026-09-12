@@ -4,10 +4,14 @@ import { db } from "../../../infrastructure/database";
 import { users } from "../../../infrastructure/database/schema";
 import { eq } from "drizzle-orm";
 import { uploadToStorage } from "../../../infrastructure/storage/s3-client";
+import { apiDoc, SwaggerTags } from "../../../infrastructure/swagger/swagger-helpers";
 
 const JWT_SECRET = process.env.JWT_SECRET || "enterprise-super-secret-jwt-key";
 
 export const mediaRouter = new Elysia()
+  /**
+   * Upload and update user avatar image
+   */
   .post(
     "/me/avatar",
     async ({ body, headers, set }) => {
@@ -37,11 +41,20 @@ export const mediaRouter = new Elysia()
       }
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.USERS,
+        summary: "Upload profile avatar",
+        description: "Uploads an image asset to storage and sets as user avatar.",
+      }),
       body: t.Object({
         file: t.File(),
       }),
     }
   )
+
+  /**
+   * Upload and update user profile cover
+   */
   .post(
     "/me/cover",
     async ({ body, headers, set }) => {
@@ -71,6 +84,11 @@ export const mediaRouter = new Elysia()
       }
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.USERS,
+        summary: "Upload profile cover banner",
+        description: "Uploads an image asset to storage and sets as user profile cover.",
+      }),
       body: t.Object({
         file: t.File(),
       }),

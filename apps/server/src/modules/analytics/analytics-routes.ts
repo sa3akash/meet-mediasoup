@@ -1,5 +1,6 @@
 import { Elysia, t } from "elysia";
 import { analyticsService } from "./analytics-service";
+import { apiDoc, SwaggerTags } from "../../infrastructure/swagger/swagger-helpers";
 
 export const analyticsRoutes = new Elysia({ prefix: "/api/analytics" })
   /**
@@ -13,6 +14,11 @@ export const analyticsRoutes = new Elysia({ prefix: "/api/analytics" })
       return { success: true, overview };
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.ANALYTICS,
+        summary: "Get analytics overview",
+        description: "Returns summary statistics including meeting hours, attendee counts, device breakdown, and network health.",
+      }),
       query: t.Object({
         hostId: t.Optional(t.String()),
       }),
@@ -22,14 +28,27 @@ export const analyticsRoutes = new Elysia({ prefix: "/api/analytics" })
   /**
    * Get specific meeting telemetry summary & quality metrics
    */
-  .get("/meetings/:id", async ({ params, set }) => {
-    const summary = await analyticsService.getMeetingSummary(params.id);
-    if (!summary) {
-      set.status = 404;
-      return { error: "Meeting metrics not found" };
+  .get(
+    "/meetings/:id",
+    async ({ params, set }) => {
+      const summary = await analyticsService.getMeetingSummary(params.id);
+      if (!summary) {
+        set.status = 404;
+        return { error: "Meeting metrics not found" };
+      }
+      return { success: true, summary };
+    },
+    {
+      ...apiDoc({
+        tag: SwaggerTags.ANALYTICS,
+        summary: "Get meeting quality & telemetry summary",
+        description: "Returns bitrate, packet loss, jitter, latency, and duration metrics for a specific meeting.",
+      }),
+      params: t.Object({
+        id: t.String(),
+      }),
     }
-    return { success: true, summary };
-  })
+  )
 
   /**
    * Get recording statistics & storage breakdown
@@ -42,6 +61,10 @@ export const analyticsRoutes = new Elysia({ prefix: "/api/analytics" })
       return { success: true, statistics: stats };
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.ANALYTICS,
+        summary: "Get recording analytics & storage stats",
+      }),
       query: t.Object({
         hostId: t.Optional(t.String()),
       }),
@@ -66,6 +89,11 @@ export const analyticsRoutes = new Elysia({ prefix: "/api/analytics" })
       return { success: true, tracked };
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.ANALYTICS,
+        summary: "Ingest WebRTC client telemetry",
+        description: "Ingests real-time network, device, and media quality stats reported by client devices.",
+      }),
       body: t.Object({
         meetingId: t.String(),
         userId: t.Optional(t.String()),
@@ -98,3 +126,4 @@ export const analyticsRoutes = new Elysia({ prefix: "/api/analytics" })
       }),
     }
   );
+

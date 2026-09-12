@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { db } from "../../../infrastructure/database";
 import { users, sessions } from "../../../infrastructure/database/schema";
 import { eq, and } from "drizzle-orm";
+import { apiDoc, SwaggerTags } from "../../../infrastructure/swagger/swagger-helpers";
 
 const JWT_SECRET = process.env.JWT_SECRET || "enterprise-super-secret-jwt-key";
 const REFRESH_SECRET = process.env.REFRESH_SECRET || "enterprise-super-secret-refresh-key";
@@ -61,6 +62,11 @@ export const tokenRouter = new Elysia()
       }
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.AUTH,
+        summary: "Refresh access token",
+        description: "Issues a new short-lived access token and rotated refresh token.",
+      }),
       body: t.Object({
         refreshToken: t.String(),
       }),
@@ -84,6 +90,11 @@ export const tokenRouter = new Elysia()
       return { message: "Logged out successfully" };
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.AUTH,
+        summary: "User logout",
+        description: "Invalidates the active session token.",
+      }),
       body: t.Object({
         refreshToken: t.Optional(t.String()),
       }),

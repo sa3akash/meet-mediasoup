@@ -1,8 +1,9 @@
-import nodemailer from "nodemailer";
 import { redis } from "../../infrastructure/redis";
 import { db } from "../../infrastructure/database";
 import { notifications as dbNotifications } from "../../infrastructure/database/schema/notifications";
 import { eq } from "drizzle-orm";
+import { sendNotificationEmail } from "./email-dispatcher";
+import { notificationStore, type NotificationItem } from "./notification-store";
 
 export type NotificationChannel = "EMAIL" | "IN_APP" | "PUSH";
 export type NotificationEventType =
@@ -12,28 +13,7 @@ export type NotificationEventType =
   | "RECORDING_READY"
   | "NEW_MESSAGE";
 
-export interface NotificationItem {
-  id: string;
-  userId: string;
-  title: string;
-  body: string;
-  type: NotificationEventType;
-  data?: Record<string, any>;
-  channels: NotificationChannel[];
-  isRead: boolean;
-  createdAt: string;
-}
-
-const notificationMemory = new Map<string, NotificationItem[]>(); // userId -> notifications
-const pushSubscriptions = new Map<string, Set<any>>(); // userId -> pushSubscriptions
-
-// Create Nodemailer test/SMTP transport
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "localhost",
-  port: Number(process.env.SMTP_PORT || 1025),
-  secure: false,
-  ignoreTLS: true,
-});
+export type { NotificationItem };
 
 export class NotificationService {
   private getRedisKey(userId: string): string {
@@ -41,13 +21,7 @@ export class NotificationService {
   }
 
   public async registerPushSubscription(userId: string, subscription: any): Promise<void> {
-    let subs = pushSubscriptions.get(userId);
-    if (!subs) {
-      subs = new Set();
-      pushSubscriptions.set(userId, subs);
-    }
-    subs.add(subscription);
-
+    notificationStore.registerPushSub(userId, subscription);
     try {
       await redis.sadd(`user:${userId}:push_subs`, JSON.stringify(subscription));
     } catch {}
@@ -78,16 +52,11 @@ export class NotificationService {
     };
 
     // 1. In-App Notification (Redis & memory)
-    let list = notificationMemory.get(userId);
-    if (!list) {
-      list = [];
-      notificationMemory.set(userId, list);
-    }
-    list.unshift(item);
+    notificationStore.addMemoryNotification(userId, item);
 
     try {
       await redis.lpush(this.getRedisKey(userId), JSON.stringify(item));
-      await redis.ltrim(this.getRedisKey(userId), 0, 99); // Keep latest 100
+      await redis.ltrim(this.getRedisKey(userId), 0, 99);
     } catch {}
 
     // Persist to PostgreSQL if user exists in database
@@ -114,47 +83,17 @@ export class NotificationService {
       // User is likely anonymous / guest participant
     }
 
-
-    // 2. Email Channel via Nodemailer (dispatched in background)
+    // 2. Email Channel
     if (channels.includes("EMAIL") && userEmail) {
-      transporter
-        .sendMail({
-          from: `"Enterprise Meet" <${process.env.SMTP_FROM || "noreply@meet.io"}>`,
-          to: userEmail,
-          subject: title,
-          html: `
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
-                <span style="font-size: 20px; font-weight: bold; color: #4f46e5;">Enterprise Meet</span>
-              </div>
-              <h2 style="color: #0f172a; margin-bottom: 12px; font-size: 18px;">${title}</h2>
-              <p style="color: #334155; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">${body}</p>
-              ${
-                data?.downloadUrl
-                  ? `<a href="${data.downloadUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Download MP4</a>`
-                  : data?.meetingUrl
-                  ? `<a href="${data.meetingUrl}" style="display: inline-block; background-color: #4f46e5; color: #ffffff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Join Meeting</a>`
-                  : ""
-              }
-              <hr style="border: none; border-top: 1px solid #f1f5f9; margin-top: 28px; margin-bottom: 16px;" />
-              <p style="color: #94a3b8; font-size: 11px;">You received this automated event notification because of your account settings on Enterprise Meet.</p>
-            </div>
-          `,
-        })
-        .catch((err: any) => {
-          console.warn("[NotificationService] Email send notice:", err.message || err);
-        });
+      sendNotificationEmail({ to: userEmail, title, body, data });
     }
-
 
     // 3. Push Channel (Web Push)
     if (channels.includes("PUSH")) {
-      const subs = pushSubscriptions.get(userId);
+      const subs = notificationStore.getPushSubs(userId);
       if (subs && subs.size > 0) {
-        // Dispatch to browser push service worker endpoints
-        subs.forEach((sub) => {
+        subs.forEach(() => {
           try {
-            // Simulated web push message payload delivery
             console.log(`[Push Notification] Dispatched to user ${userId}: ${title}`);
           } catch {}
         });
@@ -195,7 +134,7 @@ export class NotificationService {
       }
     } catch {}
 
-    return notificationMemory.get(userId) || [];
+    return notificationStore.getMemoryNotifications(userId);
   }
 
   public async markAsRead(userId: string, notificationId: string): Promise<boolean> {
@@ -204,7 +143,7 @@ export class NotificationService {
     if (!target) return false;
 
     target.isRead = true;
-    notificationMemory.set(userId, list);
+    notificationStore.setMemoryNotifications(userId, list);
 
     try {
       await redis.del(this.getRedisKey(userId));
@@ -229,7 +168,7 @@ export class NotificationService {
   }
 
   public async clearNotifications(userId: string): Promise<boolean> {
-    notificationMemory.delete(userId);
+    notificationStore.clearMemoryNotifications(userId);
     try {
       await redis.del(this.getRedisKey(userId));
     } catch {}
@@ -238,4 +177,3 @@ export class NotificationService {
 }
 
 export const notificationService = new NotificationService();
-

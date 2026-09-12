@@ -22,6 +22,7 @@ import {
   handleSocketMessage,
 } from "./modules/signaling";
 import { roomSockets } from "./modules/signaling/socket-registry";
+import { apiDoc, SwaggerTags } from "./infrastructure/swagger/swagger-helpers";
 
 // Initialize Mediasoup Worker Pool
 try {
@@ -45,24 +46,54 @@ const app = new Elysia()
     },
   }) as any)
   // Health & Readiness checks for Kubernetes Liveness & Readiness Probes
-  .get("/health", () => ({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() }))
-  .get("/health/live", () => ({ status: "live", uptime: process.uptime() }))
-  .get("/health/ready", async ({ set }) => {
-    try {
-      const redisPong = await redis.ping().catch(() => null);
-      return {
-        ready: true,
-        services: {
-          redis: redisPong === "PONG" ? "healthy" : "fallback-memory",
-        },
-        uptime: process.uptime(),
-      };
-    } catch (e: any) {
-      set.status = 503;
-      return { ready: false, error: e.message };
-    }
-  })
-  .get("/ready", () => ({ ready: true }))
+  .get(
+    "/health",
+    () => ({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() }),
+    apiDoc({
+      tag: SwaggerTags.SYSTEM,
+      summary: "System health check",
+      description: "Returns general application status and uptime.",
+    })
+  )
+  .get(
+    "/health/live",
+    () => ({ status: "live", uptime: process.uptime() }),
+    apiDoc({
+      tag: SwaggerTags.SYSTEM,
+      summary: "Kubernetes liveness probe",
+    })
+  )
+  .get(
+    "/health/ready",
+    async ({ set }) => {
+      try {
+        const redisPong = await redis.ping().catch(() => null);
+        return {
+          ready: true,
+          services: {
+            redis: redisPong === "PONG" ? "healthy" : "fallback-memory",
+          },
+          uptime: process.uptime(),
+        };
+      } catch (e: any) {
+        set.status = 503;
+        return { ready: false, error: e.message };
+      }
+    },
+    apiDoc({
+      tag: SwaggerTags.SYSTEM,
+      summary: "Kubernetes readiness probe",
+      description: "Verifies database/Redis connectivity before accepting production traffic.",
+    })
+  )
+  .get(
+    "/ready",
+    () => ({ ready: true }),
+    apiDoc({
+      tag: SwaggerTags.SYSTEM,
+      summary: "Readiness alias",
+    })
+  )
   // Mount Modular Domain Routes
   .use(authRoutes)
   .use(meetingRoutes)

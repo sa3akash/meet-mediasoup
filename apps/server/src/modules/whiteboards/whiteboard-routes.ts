@@ -1,9 +1,12 @@
 import { Elysia, t } from "elysia";
 import { whiteboardService, type WhiteboardElement } from "./whiteboard-service";
 import { broadcastToRoom } from "../signaling/socket-registry";
+import { apiDoc, SwaggerTags } from "../../infrastructure/swagger/swagger-helpers";
 
 export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
-  // Get full whiteboard state for a meeting
+  /**
+   * Get full whiteboard state for a meeting
+   */
   .get(
     "/:meetingId",
     async ({ params: { meetingId } }) => {
@@ -11,23 +14,18 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
       return { success: true, elements };
     },
     {
-      detail: {
-        tags: ["Whiteboard"],
+      ...apiDoc({
+        tag: SwaggerTags.WHITEBOARD,
         summary: "Get full whiteboard state",
-        description:
-          "Fetches all active collaborative whiteboard elements (drawing paths, shapes, sticky notes, and text) for a given meeting room.",
-        responses: {
-          200: {
-            description: "Whiteboard elements retrieved successfully",
-          },
-        },
-      },
-      params: t.Object({
-        meetingId: t.String(),
+        description: "Fetches all collaborative whiteboard elements for a given meeting room.",
       }),
+      params: t.Object({ meetingId: t.String() }),
     }
   )
-  // Add a whiteboard element (draw path, shape, sticky note, text)
+
+  /**
+   * Add a whiteboard element (draw path, shape, sticky note, text)
+   */
   .post(
     "/:meetingId/elements",
     async ({ params: { meetingId }, body, set }) => {
@@ -42,7 +40,6 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
         element.updatedAt = new Date().toISOString();
 
         const created = await whiteboardService.addObject(meetingId, element);
-
         broadcastToRoom(meetingId, {
           event: "whiteboard:elementAdded",
           data: { element: created },
@@ -55,26 +52,12 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
       }
     },
     {
-      detail: {
-        tags: ["Whiteboard"],
-        summary: "Add a whiteboard element",
-        description:
-          "Creates a new collaborative whiteboard element (freehand path, shape, sticky note, or text box) and broadcasts it to all connected participants in real time.",
-        responses: {
-          200: {
-            description: "Element added successfully",
-          },
-          400: {
-            description: "Invalid whiteboard element data",
-          },
-          500: {
-            description: "Internal server error while saving element",
-          },
-        },
-      },
-      params: t.Object({
-        meetingId: t.String(),
+      ...apiDoc({
+        tag: SwaggerTags.WHITEBOARD,
+        summary: "Add whiteboard element",
+        description: "Creates and broadcasts a new collaborative canvas element in real-time.",
       }),
+      params: t.Object({ meetingId: t.String() }),
       body: t.Object({
         id: t.String(),
         type: t.Union([
@@ -97,16 +80,18 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
       }),
     }
   )
-  // Update an existing whiteboard element
-  .put(
+
+  /**
+   * Update an existing whiteboard element
+   */
+  .patch(
     "/:meetingId/elements/:elementId",
     async ({ params: { meetingId, elementId }, body, set }) => {
       try {
-        const updates = body as Partial<WhiteboardElement>;
-        const updated = await whiteboardService.updateObject(meetingId, elementId, updates);
+        const updated = await whiteboardService.updateObject(meetingId, elementId, body as Partial<WhiteboardElement>);
         if (!updated) {
           set.status = 404;
-          return { error: "Element not found" };
+          return { error: "Whiteboard element not found" };
         }
 
         broadcastToRoom(meetingId, {
@@ -121,88 +106,62 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
       }
     },
     {
-      detail: {
-        tags: ["Whiteboard"],
-        summary: "Update an existing whiteboard element",
-        description:
-          "Updates geometry, text content, color, or positions of an existing whiteboard element and broadcasts the patch to all participants.",
-        responses: {
-          200: {
-            description: "Element updated successfully",
-          },
-          404: {
-            description: "Element not found in meeting state",
-          },
-          500: {
-            description: "Internal server error while updating element",
-          },
-        },
-      },
-      params: t.Object({
-        meetingId: t.String(),
-        elementId: t.String(),
+      ...apiDoc({
+        tag: SwaggerTags.WHITEBOARD,
+        summary: "Update whiteboard element",
+        description: "Updates geometry, text, or coordinates of an existing whiteboard element.",
       }),
-      body: t.Object(
-        {
-          data: t.Optional(t.Any()),
-          color: t.Optional(t.String()),
-          strokeWidth: t.Optional(t.Number()),
-        },
-        { additionalProperties: true }
-      ),
+      params: t.Object({ meetingId: t.String(), elementId: t.String() }),
+      body: t.Object({
+        data: t.Optional(t.Any()),
+        color: t.Optional(t.String()),
+        strokeWidth: t.Optional(t.Number()),
+      }),
     }
   )
-  // Delete a whiteboard element
+
+  /**
+   * Delete an element from the whiteboard
+   */
   .delete(
     "/:meetingId/elements/:elementId",
     async ({ params: { meetingId, elementId } }) => {
       const success = await whiteboardService.deleteObject(meetingId, elementId);
+      broadcastToRoom(meetingId, {
+        event: "whiteboard:elementDeleted",
+        data: { elementId },
+      });
       return { success };
     },
     {
-      detail: {
-        tags: ["Whiteboard"],
-        summary: "Delete a whiteboard element",
-        description: "Removes a specific whiteboard element from the canvas.",
-        responses: {
-          200: {
-            description: "Element deleted successfully",
-          },
-        },
-      },
-      params: t.Object({
-        meetingId: t.String(),
-        elementId: t.String(),
+      ...apiDoc({
+        tag: SwaggerTags.WHITEBOARD,
+        summary: "Delete whiteboard element",
+        description: "Removes an element from the canvas.",
       }),
+      params: t.Object({ meetingId: t.String(), elementId: t.String() }),
     }
   )
-  // Clear the entire whiteboard
+
+  /**
+   * Clear the entire whiteboard
+   */
   .delete(
     "/:meetingId/clear",
     async ({ params: { meetingId } }) => {
       const success = await whiteboardService.clearBoard(meetingId);
-
       broadcastToRoom(meetingId, {
         event: "whiteboard:cleared",
         data: { meetingId },
       });
-
       return { success };
     },
     {
-      detail: {
-        tags: ["Whiteboard"],
-        summary: "Clear the entire whiteboard",
-        description:
-          "Wipes all drawn strokes, shapes, sticky notes, and text from the meeting canvas and notifies all participants.",
-        responses: {
-          200: {
-            description: "Whiteboard cleared successfully",
-          },
-        },
-      },
-      params: t.Object({
-        meetingId: t.String(),
+      ...apiDoc({
+        tag: SwaggerTags.WHITEBOARD,
+        summary: "Clear whiteboard",
+        description: "Wipes all drawn strokes and elements from the canvas.",
       }),
+      params: t.Object({ meetingId: t.String() }),
     }
   );

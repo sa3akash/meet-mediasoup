@@ -1,6 +1,12 @@
 import { db } from "../../infrastructure/database";
 import { meetings } from "../../infrastructure/database/schema";
 import { eq, or, and, gte, lte, desc } from "drizzle-orm";
+import {
+  generateIcsContent,
+  generateGoogleCalendarUrl,
+  generateOutlookCalendarUrls,
+} from "./services/calendar-generators";
+
 
 export interface CalendarEvent {
   id: string;
@@ -20,15 +26,7 @@ export interface CalendarEvent {
 }
 
 export class CalendarService {
-  /**
-   * Format Date to iCalendar / Google UTC string: YYYYMMDDTHHmmssZ
-   */
-  private formatUtcCompact(date: Date): string {
-    return date
-      .toISOString()
-      .replace(/[-:]/g, "")
-      .replace(/\.\d{3}/, "");
-  }
+
 
   /**
    * Retrieve a meeting by UUID or slug
@@ -149,107 +147,18 @@ export class CalendarService {
     return events.sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
   }
 
-  /**
-   * Generate Google Calendar Web Intent URL
-   */
   generateGoogleCalendarUrl(meeting: any, baseUrl: string = "http://localhost:3000"): string {
-    const startDate = meeting.scheduledStartAt ? new Date(meeting.scheduledStartAt) : new Date();
-    const endDate = meeting.scheduledEndAt
-      ? new Date(meeting.scheduledEndAt)
-      : new Date(startDate.getTime() + 45 * 60 * 1000);
-
-    const dates = `${this.formatUtcCompact(startDate)}/${this.formatUtcCompact(endDate)}`;
-    const joinUrl = `${baseUrl}/meeting/${meeting.slug}`;
-    const passcodeNote = meeting.passcode ? `\nPasscode / PIN: ${meeting.passcode}` : "";
-    const details = `${meeting.description || "Enterprise Video Meeting"}\n\nJoin Meeting: ${joinUrl}${passcodeNote}`;
-
-    const params = new URLSearchParams({
-      action: "TEMPLATE",
-      text: meeting.title,
-      dates,
-      details,
-      location: joinUrl,
-    });
-
-    if (meeting.recurrenceRule) {
-      params.set("recur", `RRULE:${meeting.recurrenceRule}`);
-    }
-
-    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+    return generateGoogleCalendarUrl(meeting, baseUrl);
   }
 
-  /**
-   * Generate Outlook Calendar Web Intent URL (Personal & Office 365)
-   */
-  generateOutlookCalendarUrls(meeting: any, baseUrl: string = "http://localhost:3000"): {
-    liveUrl: string;
-    office365Url: string;
-  } {
-    const startDate = meeting.scheduledStartAt ? new Date(meeting.scheduledStartAt) : new Date();
-    const endDate = meeting.scheduledEndAt
-      ? new Date(meeting.scheduledEndAt)
-      : new Date(startDate.getTime() + 45 * 60 * 1000);
-
-    const joinUrl = `${baseUrl}/meeting/${meeting.slug}`;
-    const passcodeNote = meeting.passcode ? `\nPasscode / PIN: ${meeting.passcode}` : "";
-    const body = `${meeting.description || "Enterprise Video Meeting"}\n\nJoin Meeting: ${joinUrl}${passcodeNote}`;
-
-    const params = new URLSearchParams({
-      subject: meeting.title,
-      startdt: startDate.toISOString(),
-      enddt: endDate.toISOString(),
-      body,
-      location: joinUrl,
-    });
-
-    return {
-      liveUrl: `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`,
-      office365Url: `https://outlook.office.com/calendar/0/deeplink/compose?${params.toString()}`,
-    };
+  generateOutlookCalendarUrls(meeting: any, baseUrl: string = "http://localhost:3000") {
+    return generateOutlookCalendarUrls(meeting, baseUrl);
   }
 
-  /**
-   * Generate RFC 5545 standard .ics file format
-   */
   generateIcsContent(meeting: any, baseUrl: string = "http://localhost:3000"): string {
-    const startDate = meeting.scheduledStartAt ? new Date(meeting.scheduledStartAt) : new Date();
-    const endDate = meeting.scheduledEndAt
-      ? new Date(meeting.scheduledEndAt)
-      : new Date(startDate.getTime() + 45 * 60 * 1000);
-
-    const nowStr = this.formatUtcCompact(new Date());
-    const startStr = this.formatUtcCompact(startDate);
-    const endStr = this.formatUtcCompact(endDate);
-    const joinUrl = `${baseUrl}/meeting/${meeting.slug}`;
-    const passcodeNote = meeting.passcode ? `\\nPasscode / PIN: ${meeting.passcode}` : "";
-    const description = `${(meeting.description || "Enterprise Video Meeting").replace(/\n/g, "\\n")}\\n\\nJoin URL: ${joinUrl}${passcodeNote}`;
-
-    const rruleLine = meeting.recurrenceRule ? `RRULE:${meeting.recurrenceRule}\r\n` : "";
-
-    return [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//Enterprise Meet Conferencing//EN",
-      "CALSCALE:GREGORIAN",
-      "METHOD:PUBLISH",
-      "BEGIN:VEVENT",
-      `UID:${meeting.id}@meet.enterprise`,
-      `DTSTAMP:${nowStr}`,
-      `DTSTART:${startStr}`,
-      `DTEND:${endStr}`,
-      rruleLine ? rruleLine.trim() : null,
-      `SUMMARY:${meeting.title.replace(/\n/g, " ")}`,
-      `DESCRIPTION:${description}`,
-      `LOCATION:${joinUrl}`,
-      `URL:${joinUrl}`,
-      "STATUS:CONFIRMED",
-      "SEQUENCE:0",
-      "END:VEVENT",
-      "END:VCALENDAR",
-    ]
-      .filter(Boolean)
-      .join("\r\n");
+    return generateIcsContent(meeting, baseUrl);
   }
 }
 
 export const calendarService = new CalendarService();
+

@@ -6,6 +6,7 @@ import { users, sessions } from "../../../infrastructure/database/schema";
 import { generateUUIDv7 } from "@meet/shared-utils";
 import { eq } from "drizzle-orm";
 import { parseDeviceInfo } from "../utils/device-parser";
+import { apiDoc, SwaggerTags } from "../../../infrastructure/swagger/swagger-helpers";
 
 const JWT_SECRET = process.env.JWT_SECRET || "enterprise-super-secret-jwt-key";
 const REFRESH_SECRET = process.env.REFRESH_SECRET || "enterprise-super-secret-refresh-key";
@@ -82,6 +83,11 @@ export const loginRouter = new Elysia().post(
     };
   },
   {
+    ...apiDoc({
+      tag: SwaggerTags.AUTH,
+      summary: "User login",
+      description: "Authenticates user with email/password and returns session and JWT tokens.",
+    }),
     body: t.Object({
       email: t.String(),
       password: t.String(),

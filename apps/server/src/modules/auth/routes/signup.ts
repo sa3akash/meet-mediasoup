@@ -6,6 +6,7 @@ import { users } from "../../../infrastructure/database/schema";
 import { generateUUIDv7 } from "@meet/shared-utils";
 import { eq } from "drizzle-orm";
 import { sendVerificationEmail } from "../../../infrastructure/mailer";
+import { apiDoc, SwaggerTags } from "../../../infrastructure/swagger/swagger-helpers";
 
 const JWT_SECRET = process.env.JWT_SECRET || "enterprise-super-secret-jwt-key";
 
@@ -52,6 +53,11 @@ export const signupRouter = new Elysia()
       };
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.AUTH,
+        summary: "Register new user",
+        description: "Registers a user account and dispatches an email verification challenge.",
+      }),
       body: t.Object({
         email: t.String(),
         password: t.String(),
@@ -91,6 +97,11 @@ export const signupRouter = new Elysia()
       }
     },
     {
+      ...apiDoc({
+        tag: SwaggerTags.AUTH,
+        summary: "Verify account email",
+        description: "Confirms email token and activates verified user account status.",
+      }),
       body: t.Object({
         token: t.String(),
       }),

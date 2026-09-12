@@ -4,6 +4,7 @@ import { db } from "../../../infrastructure/database";
 import { users, userPresence } from "../../../infrastructure/database/schema";
 import { eq } from "drizzle-orm";
 import { setUserPresence } from "../../../infrastructure/redis";
+import { apiDoc, SwaggerTags } from "../../../infrastructure/swagger/swagger-helpers";
 
 const JWT_SECRET = process.env.JWT_SECRET || "enterprise-super-secret-jwt-key";
 
@@ -47,6 +48,11 @@ export const presenceRouter = new Elysia().patch(
     }
   },
   {
+    ...apiDoc({
+      tag: SwaggerTags.USERS,
+      summary: "Update user presence",
+      description: "Sets user presence status (ONLINE, AWAY, BUSY, OFFLINE) in DB and Redis cluster.",
+    }),
     body: t.Object({
       status: t.Union([
         t.Literal("ONLINE"),
