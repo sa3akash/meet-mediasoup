@@ -115,3 +115,63 @@ export async function releaseLock(lockKey: string, identifier: string): Promise<
   }
   return false;
 }
+
+export async function saveMeetingPoll(meetingId: string, poll: any): Promise<void> {
+  const key = `meeting:room:${meetingId}:polls`;
+  if (isRedisAvailable) {
+    try {
+      await redis.hset(key, poll.id, JSON.stringify(poll));
+      await redis.expire(key, 86400);
+      return;
+    } catch {}
+  }
+  let pollMap = memoryStore.get(key);
+  if (!pollMap) { pollMap = new Map(); memoryStore.set(key, pollMap); }
+  pollMap.set(poll.id, JSON.stringify(poll));
+}
+
+export async function getMeetingPolls(meetingId: string): Promise<any[]> {
+  const key = `meeting:room:${meetingId}:polls`;
+  if (isRedisAvailable) {
+    try {
+      const raw = await redis.hgetall(key);
+      return Object.values(raw).map((val) => JSON.parse(val));
+    } catch {}
+  }
+  const pollMap = memoryStore.get(key);
+  if (!pollMap) return [];
+  return Array.from(pollMap.values()).map((val: any) => JSON.parse(val));
+}
+
+export async function saveBreakoutState(meetingId: string, breakoutState: any): Promise<void> {
+  const key = `meeting:room:${meetingId}:breakouts`;
+  const payload = JSON.stringify(breakoutState);
+  if (isRedisAvailable) {
+    try {
+      if (breakoutState) {
+        await redis.set(key, payload, "EX", 86400);
+      } else {
+        await redis.del(key);
+      }
+      return;
+    } catch {}
+  }
+  if (breakoutState) {
+    memoryStore.set(key, payload);
+  } else {
+    memoryStore.delete(key);
+  }
+}
+
+export async function getBreakoutState(meetingId: string): Promise<any | null> {
+  const key = `meeting:room:${meetingId}:breakouts`;
+  if (isRedisAvailable) {
+    try {
+      const raw = await redis.get(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch {}
+  }
+  const mem = memoryStore.get(key);
+  return mem ? JSON.parse(mem) : null;
+}
+

@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { useMediaStore } from "../../stores/media-store";
 import { VideoTile } from "./video-tile";
-import { ScreenShare } from "lucide-react";
+import { ScreenShare, Sparkles } from "lucide-react";
 
 interface MeetingGridProps {
   localDisplayName: string;
@@ -91,6 +91,7 @@ export function MeetingGrid({ localDisplayName }: MeetingGridProps) {
     myParticipantId,
     activeSpeakerId,
     pinnedParticipantId,
+    spotlightParticipantId,
     layoutMode,
     setPinnedParticipant,
   } = useMeetingStore();
@@ -123,11 +124,18 @@ export function MeetingGrid({ localDisplayName }: MeetingGridProps) {
       }
     : null;
 
+  // Spotlight participant check
+  const isSpotlightActive = Boolean(spotlightParticipantId);
+  const isLocalSpotlighted = spotlightParticipantId === myParticipantId;
+  const spotlightRemoteParticipant = spotlightParticipantId
+    ? participants.get(spotlightParticipantId)
+    : null;
+
   const totalTiles = participantList.length + 1; // +1 for local participant
 
   // Dynamic grid column layout
   const getGridColsClass = () => {
-    if (layoutMode === "SPOTLIGHT" || pinnedParticipantId) return "grid-cols-1";
+    if (layoutMode === "SPOTLIGHT" || pinnedParticipantId || spotlightParticipantId) return "grid-cols-1";
     if (totalTiles <= 1) return "grid-cols-1";
     if (totalTiles <= 2) return "grid-cols-1 md:grid-cols-2";
     if (totalTiles <= 4) return "grid-cols-2";
@@ -189,8 +197,70 @@ export function MeetingGrid({ localDisplayName }: MeetingGridProps) {
             ))}
           </div>
         </div>
+      ) : isSpotlightActive ? (
+        /* 2. Spotlighted Participant Stage Layout */
+        <div className="w-full h-full flex flex-col md:flex-row gap-4">
+          <div className="flex-1 h-full min-h-0 relative">
+            <VideoTile
+              displayName={
+                isLocalSpotlighted
+                  ? `${localDisplayName} (You)`
+                  : spotlightRemoteParticipant?.displayName || "Participant"
+              }
+              avatarUrl={spotlightRemoteParticipant?.avatarUrl}
+              stream={
+                isLocalSpotlighted
+                  ? localStream
+                  : remoteStreams.get(spotlightParticipantId!)?.videoStream
+              }
+              isMuted={
+                isLocalSpotlighted ? isAudioMuted : spotlightRemoteParticipant?.isAudioMuted
+              }
+              isVideoMuted={
+                isLocalSpotlighted ? isVideoMuted : spotlightRemoteParticipant?.isVideoMuted
+              }
+              isLocal={isLocalSpotlighted}
+              isActiveSpeaker={activeSpeakerId === spotlightParticipantId}
+            />
+            <div className="absolute top-4 left-4 bg-amber-500/20 backdrop-blur-md border border-amber-500/30 text-amber-300 text-xs font-semibold px-3 py-1 rounded-xl flex items-center gap-1.5 shadow-lg">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Spotlighted for everyone</span>
+            </div>
+          </div>
+
+          {/* Filmstrip Sidebar */}
+          <div className="w-full md:w-72 flex md:flex-col gap-3 overflow-x-auto md:overflow-y-auto shrink-0">
+            {!isLocalSpotlighted && (
+              <div className="h-40 min-w-[160px] md:min-w-full shrink-0">
+                <VideoTile
+                  displayName={localDisplayName}
+                  stream={localStream}
+                  isMuted={isAudioMuted}
+                  isVideoMuted={isVideoMuted}
+                  isLocal={true}
+                />
+              </div>
+            )}
+            {participantList
+              .filter((p) => p.id !== spotlightParticipantId)
+              .map((p) => (
+                <div key={p.id} className="h-40 min-w-[160px] md:min-w-full shrink-0">
+                  <VideoTile
+                    displayName={p.displayName}
+                    avatarUrl={p.avatarUrl}
+                    stream={remoteStreams.get(p.id)?.videoStream}
+                    isMuted={p.isAudioMuted}
+                    isVideoMuted={p.isVideoMuted}
+                    isActiveSpeaker={activeSpeakerId === p.id}
+                    isHandRaised={p.isHandRaised}
+                    onPinToggle={() => setPinnedParticipant(p.id)}
+                  />
+                </div>
+              ))}
+          </div>
+        </div>
       ) : pinnedParticipant ? (
-        /* 2. Pinned Participant Stage Layout */
+        /* 3. Pinned Participant Stage Layout */
         <div className="w-full h-full flex flex-col md:flex-row gap-4">
           <div className="flex-1 h-full min-h-0">
             <VideoTile

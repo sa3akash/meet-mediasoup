@@ -1,15 +1,26 @@
 import type { ServerWebSocket } from "bun";
 import { roomManager } from "../../infrastructure/mediasoup/room-manager";
 import { audioObserverService } from "../../infrastructure/mediasoup/audio-observer-service";
-import { addRoomParticipant, removeRoomParticipant, getRoomParticipants, setUserPresence } from "../../infrastructure/redis";
+import {
+  addRoomParticipant,
+  removeRoomParticipant,
+  getRoomParticipants,
+  setUserPresence,
+  saveMeetingPoll,
+  getMeetingPolls,
+  saveBreakoutState,
+  getBreakoutState,
+} from "../../infrastructure/redis";
 import {
   type SocketData,
   registerSocket,
   unregisterSocket,
   broadcastToRoom,
+  sendToParticipant,
   sendResponse,
   sendError,
   roomSockets,
+  participantSockets,
 } from "./socket-registry";
 import { handleWebRtcMessage } from "./handlers/webrtc-handlers";
 
@@ -102,6 +113,7 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
 
         sendResponse(ws, id, {
           participantId: ws.data.participantId,
+          role: ws.data.role,
           rtpCapabilities,
           existingProducers,
           existingParticipants,
@@ -157,22 +169,14 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
       case "webrtc:signal": {
         const { to, signal, appData } = data;
         if (ws.data.meetingId) {
-          const sockets = roomSockets.get(ws.data.meetingId);
-          if (sockets) {
-            for (const targetWs of sockets) {
-              if (targetWs.data.participantId === to && targetWs.readyState === 1) {
-                targetWs.send(JSON.stringify({
-                  event: "webrtc:signal",
-                  data: {
-                    from: ws.data.participantId,
-                    signal,
-                    appData,
-                  },
-                }));
-                break;
-              }
-            }
-          }
+          sendToParticipant(to, {
+            event: "webrtc:signal",
+            data: {
+              from: ws.data.participantId,
+              signal,
+              appData,
+            },
+          });
         }
         sendResponse(ws, id, { forwarded: true });
         break;
@@ -212,22 +216,20 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
           break;
         }
 
-        const sockets = roomSockets.get(ws.data.meetingId);
-        if (sockets) {
-          for (const targetWs of sockets) {
-            if (targetWs.data.participantId === targetParticipantId) {
-              targetWs.send(JSON.stringify({
-                event: "participant:kicked",
-                data: {
-                  reason: "You were removed from the meeting by the host.",
-                  participantId: targetParticipantId,
-                },
-              }));
-              handleSocketClose(targetWs);
-              targetWs.close();
-              break;
-            }
-          }
+        // Deliver kick event across any of the 40+ pods via sendToParticipant
+        sendToParticipant(targetParticipantId, {
+          event: "participant:kicked",
+          data: {
+            reason: "You were removed from the meeting by the host.",
+            participantId: targetParticipantId,
+          },
+        });
+
+        // Close local socket if hosted on this pod
+        const targetWs = participantSockets.get(targetParticipantId);
+        if (targetWs) {
+          handleSocketClose(targetWs);
+          targetWs.close();
         }
 
         broadcastToRoom(ws.data.meetingId, {
@@ -255,25 +257,18 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
           break;
         }
 
-        const sockets = roomSockets.get(ws.data.meetingId);
-        if (sockets) {
-          for (const targetWs of sockets) {
-            if (targetWs.data.participantId === targetParticipantId && targetWs.readyState === 1) {
-              targetWs.send(JSON.stringify({
-                event: "participant:forceMediaState",
-                data: {
-                  mediaType,
-                  muted: Boolean(muted),
-                  by: ws.data.displayName || "Host",
-                  reason: muted
-                    ? (mediaType === "audio" ? "The host has muted your microphone." : "The host has turned off your camera.")
-                    : (mediaType === "audio" ? "The host is asking you to unmute your microphone." : "The host is asking you to turn on your camera."),
-                },
-              }));
-              break;
-            }
-          }
-        }
+        // Deliver media command across any of the 40+ pods via sendToParticipant
+        sendToParticipant(targetParticipantId, {
+          event: "participant:forceMediaState",
+          data: {
+            mediaType,
+            muted: Boolean(muted),
+            by: ws.data.displayName || "Host",
+            reason: muted
+              ? (mediaType === "audio" ? "The host has muted your microphone." : "The host has turned off your camera.")
+              : (mediaType === "audio" ? "The host is asking you to unmute your microphone." : "The host is asking you to turn on your camera."),
+          },
+        });
 
         if (muted) {
           const targetRecord = allParticipants.find((p: any) => (p.id || p.participantId) === targetParticipantId);
@@ -366,6 +361,270 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
           data: { meetingId: ws.data.meetingId, endedBy: ws.data.participantId },
         });
         sendResponse(ws, id, { ended: true });
+        break;
+      }
+
+      case "participant:setRole": {
+        const { targetParticipantId, role } = data; // "CO_HOST" | "PARTICIPANT"
+        if (!ws.data.meetingId || !targetParticipantId || !role) {
+          sendError(ws, id, 400, "Missing required parameters");
+          break;
+        }
+
+        if (ws.data.role !== "HOST") {
+          sendError(ws, id, 403, "Only the meeting host can promote or demote participants");
+          break;
+        }
+
+        const allParticipants = await getRoomParticipants(ws.data.meetingId);
+        const targetRecord = allParticipants.find((p: any) => (p.id || p.participantId) === targetParticipantId);
+        if (targetRecord) {
+          const updated = { ...targetRecord, role };
+          await addRoomParticipant(ws.data.meetingId, targetParticipantId, updated);
+
+          const targetWs = participantSockets.get(targetParticipantId);
+          if (targetWs) {
+            targetWs.data.role = role;
+          }
+
+          broadcastToRoom(ws.data.meetingId, {
+            event: "participant:roleChanged",
+            data: { participantId: targetParticipantId, role },
+          });
+        }
+
+        sendResponse(ws, id, { success: true, targetParticipantId, role });
+        break;
+      }
+
+      case "participant:spotlight": {
+        const { targetParticipantId } = data; // string or null to clear
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can spotlight a participant");
+          break;
+        }
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "participant:spotlighted",
+          data: {
+            participantId: targetParticipantId || null,
+            spotlightParticipantId: targetParticipantId || null,
+          },
+        });
+
+        sendResponse(ws, id, {
+          success: true,
+          participantId: targetParticipantId || null,
+          spotlightParticipantId: targetParticipantId || null,
+        });
+        break;
+      }
+
+      case "poll:create": {
+        const { question, options, isAnonymous } = data;
+        if (!ws.data.meetingId || !question || !Array.isArray(options) || options.length < 2) {
+          sendError(ws, id, 400, "Poll question and at least 2 options required");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can create polls");
+          break;
+        }
+
+        const pollId = crypto.randomUUID();
+        const newPoll = {
+          id: pollId,
+          meetingId: ws.data.meetingId,
+          creatorId: ws.data.participantId,
+          creatorName: ws.data.displayName || "Host",
+          question,
+          options: options.map((opt: string, idx: number) => ({
+            id: idx,
+            text: opt,
+            votesCount: 0,
+          })),
+          votes: {} as Record<string, number>,
+          totalVotes: 0,
+          isAnonymous: Boolean(isAnonymous),
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        };
+
+        await saveMeetingPoll(ws.data.meetingId, newPoll);
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "poll:new",
+          data: { ...newPoll, poll: newPoll },
+        });
+
+        sendResponse(ws, id, { success: true, poll: newPoll });
+        break;
+      }
+
+      case "poll:vote": {
+        const { pollId, optionIndex } = data;
+        if (!ws.data.meetingId || !pollId || optionIndex === undefined) {
+          sendError(ws, id, 400, "Missing pollId or optionIndex");
+          break;
+        }
+
+        const polls = await getMeetingPolls(ws.data.meetingId);
+        const poll = polls.find((p: any) => p.id === pollId);
+        if (!poll || !poll.isActive) {
+          sendError(ws, id, 400, "Poll is not active or does not exist");
+          break;
+        }
+
+        const voterId = ws.data.participantId!;
+        poll.votes = poll.votes || {};
+        poll.votes[voterId] = Number(optionIndex);
+
+        poll.options.forEach((opt: any, idx: number) => {
+          opt.votesCount = Object.values(poll.votes).filter((v) => v === idx).length;
+        });
+        poll.totalVotes = Object.keys(poll.votes).length;
+
+        await saveMeetingPoll(ws.data.meetingId, poll);
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "poll:updated",
+          data: { ...poll, poll },
+        });
+
+        sendResponse(ws, id, { success: true, poll });
+        break;
+      }
+
+      case "poll:end": {
+        const { pollId } = data;
+        if (!ws.data.meetingId || !pollId) {
+          sendError(ws, id, 400, "Missing pollId");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can end polls");
+          break;
+        }
+
+        const polls = await getMeetingPolls(ws.data.meetingId);
+        const poll = polls.find((p: any) => p.id === pollId);
+        if (poll) {
+          poll.isActive = false;
+          poll.closedAt = new Date().toISOString();
+          await saveMeetingPoll(ws.data.meetingId, poll);
+
+          broadcastToRoom(ws.data.meetingId, {
+            event: "poll:ended",
+            data: { ...poll, pollId, poll },
+          });
+        }
+
+        sendResponse(ws, id, { success: true, pollId });
+        break;
+      }
+
+      case "poll:list": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+        const polls = await getMeetingPolls(ws.data.meetingId);
+        sendResponse(ws, id, { polls });
+        break;
+      }
+
+      case "breakout:start": {
+        const { rooms, durationMinutes } = data;
+        if (!ws.data.meetingId || !Array.isArray(rooms)) {
+          sendError(ws, id, 400, "Invalid breakout rooms data");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can manage breakout rooms");
+          break;
+        }
+
+        const breakoutState = {
+          meetingId: ws.data.meetingId,
+          rooms: rooms.map((r: any) => ({
+            id: r.id || crypto.randomUUID(),
+            name: r.name,
+            participantIds: r.participantIds || [],
+          })),
+          durationMinutes: durationMinutes || 10,
+          startedAt: new Date().toISOString(),
+          isActive: true,
+        };
+
+        await saveBreakoutState(ws.data.meetingId, breakoutState);
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "breakout:started",
+          data: breakoutState,
+        });
+
+        sendResponse(ws, id, { success: true, breakoutState });
+        break;
+      }
+
+      case "breakout:broadcast": {
+        const { message } = data;
+        if (!ws.data.meetingId || !message) {
+          sendError(ws, id, 400, "Missing message");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can broadcast to breakout rooms");
+          break;
+        }
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "breakout:broadcast",
+          data: {
+            message,
+            senderName: ws.data.displayName || "Host",
+            timestamp: new Date().toISOString(),
+          },
+        });
+
+        sendResponse(ws, id, { success: true });
+        break;
+      }
+
+      case "breakout:end": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can end breakout rooms");
+          break;
+        }
+
+        await saveBreakoutState(ws.data.meetingId, null);
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "breakout:ended",
+          data: { meetingId: ws.data.meetingId },
+        });
+
+        sendResponse(ws, id, { success: true, ended: true });
         break;
       }
 

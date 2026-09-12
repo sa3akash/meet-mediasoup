@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: meet
+  labels:
+    app.kubernetes.io/name: meet
+    app.kubernetes.io/part-of: video-conferencing

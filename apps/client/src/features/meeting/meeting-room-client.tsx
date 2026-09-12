@@ -2,19 +2,26 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PreJoinLobby } from "../lobby/pre-join-lobby";
 import { MeetingGrid } from "./meeting-grid";
 import { ControlBar } from "./control-bar";
 import { ChatPanel } from "../chat/chat-panel";
 import { ParticipantsPanel } from "./participants-panel";
+import { PollsPanel } from "./polls-panel";
+import { BreakoutRoomsModal } from "./breakout-rooms-modal";
 import { HostControlsModal } from "../meetings/host-controls-modal";
 import { WaitingRoomManager } from "../meetings/waiting-room-manager";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { useMediaStore } from "../../stores/media-store";
-import { useMediasoup, type MediaForcedEvent } from "../../hooks/use-mediasoup";
-import { Disc, PhoneOff, X, UserX, Mic, MicOff, Video, VideoOff } from "lucide-react";
+import {
+  useMediasoup,
+  type MediaForcedEvent,
+  type PollData,
+  type BreakoutStateEvent,
+} from "../../hooks/use-mediasoup";
+import { Disc, PhoneOff, X, UserX, Mic, MicOff, Video, VideoOff, Megaphone } from "lucide-react";
 
 export interface MessageAttachment {
   name: string;
@@ -75,6 +82,15 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
   const [kickedReason, setKickedReason] = useState<string | null>(null);
   const [mediaPrompt, setMediaPrompt] = useState<MediaForcedEvent | null>(null);
   const [mediaNotification, setMediaNotification] = useState<string | null>(null);
+
+  // Polls & Breakout Rooms State
+  const [polls, setPolls] = useState<PollData[]>([]);
+  const [breakoutState, setBreakoutState] = useState<BreakoutStateEvent | null>(null);
+  const [isBreakoutSetupOpen, setIsBreakoutSetupOpen] = useState(false);
+  const [breakoutBroadcastToast, setBreakoutBroadcastToast] = useState<{
+    message: string;
+    from: string;
+  } | null>(null);
 
   const {
     isChatOpen,
@@ -166,6 +182,31 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     }
   }, []);
 
+  const handlePollNew = useCallback((poll: PollData) => {
+    setPolls((prev) => [poll, ...prev.filter((p) => p.id !== poll.id)]);
+  }, []);
+
+  const handlePollUpdated = useCallback((poll: PollData) => {
+    setPolls((prev) => prev.map((p) => (p.id === poll.id ? poll : p)));
+  }, []);
+
+  const handlePollEnded = useCallback((pollId: string, poll: PollData) => {
+    setPolls((prev) => prev.map((p) => (p.id === pollId ? { ...poll, isActive: false } : p)));
+  }, []);
+
+  const handleBreakoutStarted = useCallback((data: BreakoutStateEvent) => {
+    setBreakoutState(data);
+  }, []);
+
+  const handleBreakoutBroadcast = useCallback((data: { message: string; from: string }) => {
+    setBreakoutBroadcastToast(data);
+    setTimeout(() => setBreakoutBroadcastToast(null), 6000);
+  }, []);
+
+  const handleBreakoutEnded = useCallback(() => {
+    setBreakoutState(null);
+  }, []);
+
   const {
     sendRequest,
     toggleAudio,
@@ -174,6 +215,15 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     kickParticipant,
     controlParticipantMedia,
     muteAllParticipants,
+    promoteParticipant,
+    spotlightParticipant,
+    createPoll,
+    votePoll,
+    endPoll,
+    listPolls,
+    startBreakoutRooms,
+    broadcastToBreakoutRooms,
+    endBreakoutRooms,
   } = useMediasoup(
     hasJoined ? slug : "",
     displayName,
@@ -185,6 +235,12 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       onMeetingEnded: handleIncomingMeetingEnded,
       onKicked: handleKicked,
       onMediaForced: handleMediaForced,
+      onPollNew: handlePollNew,
+      onPollUpdated: handlePollUpdated,
+      onPollEnded: handlePollEnded,
+      onBreakoutStarted: handleBreakoutStarted,
+      onBreakoutBroadcast: handleBreakoutBroadcast,
+      onBreakoutEnded: handleBreakoutEnded,
     },
     isMeetingHost ? "HOST" : "PARTICIPANT"
   );
@@ -207,6 +263,25 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     setDisplayName(name);
     setHasJoined(true);
   };
+
+  useEffect(() => {
+    if (hasJoined) {
+      listPolls()
+        .then((res: any) => {
+          if (res && Array.isArray(res.polls)) {
+            setPolls(res.polls);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [hasJoined, listPolls]);
+
+  const currentBreakoutRoom = useMemo(() => {
+    if (!breakoutState?.rooms) return null;
+    const myPid = useMeetingStore.getState().myParticipantId;
+    if (!myPid) return null;
+    return breakoutState.rooms.find((r) => r.participantIds.includes(myPid)) || null;
+  }, [breakoutState]);
 
   const handleLeave = () => {
     resetMedia();
@@ -398,9 +473,63 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
             onKickParticipant={kickParticipant}
             onControlParticipantMedia={controlParticipantMedia}
             onMuteAll={muteAllParticipants}
+            onPromoteParticipant={promoteParticipant}
+            onSpotlightParticipant={spotlightParticipant}
           />
         )}
+        <PollsPanel
+          polls={polls}
+          breakoutState={breakoutState}
+          currentBreakoutRoom={currentBreakoutRoom}
+          onCreatePoll={createPoll}
+          onVotePoll={votePoll}
+          onEndPoll={endPoll}
+          onOpenBreakoutSetup={() => setIsBreakoutSetupOpen(true)}
+          onBroadcastBreakout={broadcastToBreakoutRooms}
+          onEndBreakout={endBreakoutRooms}
+        />
       </div>
+
+      {/* Breakout Broadcast Floating Announcement */}
+      {breakoutBroadcastToast && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 max-w-md bg-indigo-600/95 text-white border border-indigo-400/30 rounded-2xl px-4 py-3 shadow-2xl backdrop-blur-xl flex items-center gap-3 animate-in slide-in-from-top-4">
+          <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <Megaphone className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] uppercase font-bold text-indigo-200 tracking-wider block">
+              Host Announcement
+            </span>
+            <p className="text-xs font-medium text-white line-clamp-2">
+              {breakoutBroadcastToast.message}
+            </p>
+          </div>
+          <button
+            onClick={() => setBreakoutBroadcastToast(null)}
+            className="p-1 text-white/60 hover:text-white rounded-lg transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Breakout Room Indicator Bar (if assigned to breakout room) */}
+      {currentBreakoutRoom && (
+        <div className="absolute top-4 left-6 z-40 bg-neutral-900/90 border border-indigo-500/30 text-white rounded-2xl px-4 py-2 shadow-xl backdrop-blur-md flex items-center gap-3">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="text-xs font-semibold text-white">
+            {currentBreakoutRoom.name}
+          </span>
+          <span className="text-[11px] text-white/50">| Breakout Session</span>
+        </div>
+      )}
+
+      {/* Breakout Rooms Modal for Host Setup */}
+      <BreakoutRoomsModal
+        isOpen={isBreakoutSetupOpen}
+        onClose={() => setIsBreakoutSetupOpen(false)}
+        onStartBreakout={startBreakoutRooms}
+      />
 
       {/* Floating In-Call Message Toast Notification (Google Meet Style) */}
       {latestMessageToast && !isChatOpen && (
@@ -411,7 +540,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
           }}
           className="absolute bottom-24 left-6 z-40 max-w-sm bg-neutral-900/95 hover:bg-neutral-850 text-white border border-white/15 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex items-start gap-3 cursor-pointer transition-all duration-300 animate-in slide-in-from-bottom-4 hover:scale-[1.02]"
         >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-md">
+          <div className="w-8 h-8 rounded-full bg-linear-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-md">
             {(latestMessageToast.senderName || "P").charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0 pr-1">

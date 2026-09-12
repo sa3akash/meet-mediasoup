@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meet-server-config
+  namespace: meet
+data:
+  NODE_ENV: "production"
+  PORT: "4000"
+  DATABASE_URL: "postgresql://postgres:postgrespassword@meet-postgres:5432/meet"
+  REDIS_URL: "redis://meet-redis:6379"
+  MINIO_ENDPOINT: "http://meet-minio:9000"
+  MINIO_BUCKET: "meet-recordings"
+  TURN_URL: "turn:meet-coturn:3478"
+  TURN_REALM: "meet.enterprise.internal"

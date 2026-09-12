@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meet-coturn
+  namespace: meet
+  labels:
+    app.kubernetes.io/name: meet-coturn
+    app.kubernetes.io/component: stun-turn
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: meet-coturn
+  template:
+    metadata:
+      labels:
+        app: meet-coturn
+    spec:
+      containers:
+        - name: coturn
+          image: coturn/coturn:latest
+          args:
+            - "-n"
+            - "--log-file=stdout"
+            - "--listening-port=3478"
+            - "--tls-listening-port=5349"
+            - "--min-port=49160"
+            - "--max-port=49200"
+            - "--realm=meet.enterprise.internal"
+            - "--fingerprint"
+            - "--lt-cred-mech"
+            - "--user=meetuser:meetsecretpass"
+          ports:
+            - name: turn-udp
+              containerPort: 3478
+              protocol: UDP
+            - name: turn-tcp
+              containerPort: 3478
+              protocol: TCP
+            - name: turns-udp
+              containerPort: 5349
+              protocol: UDP
+            - name: turns-tcp
+              containerPort: 5349
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meet-coturn-service
+  namespace: meet
+  labels:
+    app.kubernetes.io/name: meet-coturn
+spec:
+  type: LoadBalancer
+  selector:
+    app: meet-coturn
+  ports:
+    - name: turn-udp
+      port: 3478
+      targetPort: 3478
+      protocol: UDP
+    - name: turn-tcp
+      port: 3478
+      targetPort: 3478
+      protocol: TCP
+    - name: turns-udp
+      port: 5349
+      targetPort: 5349
+      protocol: UDP
+    - name: turns-tcp
+      port: 5349
+      targetPort: 5349
+      protocol: TCP

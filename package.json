@@ -17,6 +17,7 @@
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "bun-types": "^1.4.2",
     "turbo": "^2.4.0",
     "typescript": "^5"
   },

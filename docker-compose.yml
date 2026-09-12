@@ -59,7 +59,12 @@ services:
     image: coturn/coturn:latest
     container_name: meet_coturn
     restart: unless-stopped
-    network_mode: "host"
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "5349:5349/tcp"
+      - "5349:5349/udp"
+      - "49160-49200:49160-49200/udp"
     volumes:
       - ./docker/coturn/turnserver.conf:/etc/turnserver.conf:ro
 

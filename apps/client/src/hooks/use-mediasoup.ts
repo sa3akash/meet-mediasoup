@@ -25,6 +25,35 @@ export interface MediaForcedEvent {
   reason?: string;
 }
 
+export interface BreakoutRoomInfo {
+  id: string;
+  name: string;
+  participantIds: string[];
+}
+
+export interface BreakoutStateEvent {
+  rooms: BreakoutRoomInfo[];
+  durationMinutes?: number;
+  endsAt?: number;
+}
+
+export interface PollOption {
+  text: string;
+  votes: number;
+}
+
+export interface PollData {
+  id: string;
+  question: string;
+  options: PollOption[];
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+  isActive: boolean;
+  totalVotes: number;
+  userVotedIndex?: number;
+}
+
 interface UseMediasoupCallbacks {
   onChatMessage?: (msg: any) => void;
   onReactionReceived?: (emoji: string) => void;
@@ -32,6 +61,14 @@ interface UseMediasoupCallbacks {
   onSettingsUpdated?: (settings: any) => void;
   onKicked?: (reason: string) => void;
   onMediaForced?: (event: MediaForcedEvent) => void;
+  onRoleChanged?: (participantId: string, role: string) => void;
+  onSpotlighted?: (participantId: string | null) => void;
+  onPollNew?: (poll: PollData) => void;
+  onPollUpdated?: (poll: PollData) => void;
+  onPollEnded?: (pollId: string, poll: PollData) => void;
+  onBreakoutStarted?: (data: BreakoutStateEvent) => void;
+  onBreakoutBroadcast?: (data: { message: string; from: string }) => void;
+  onBreakoutEnded?: () => void;
 }
 
 export function useMediasoup(
@@ -61,6 +98,22 @@ export function useMediasoup(
   onKickedRef.current = callbacks?.onKicked;
   const onMediaForcedRef = useRef(callbacks?.onMediaForced);
   onMediaForcedRef.current = callbacks?.onMediaForced;
+  const onRoleChangedRef = useRef(callbacks?.onRoleChanged);
+  onRoleChangedRef.current = callbacks?.onRoleChanged;
+  const onSpotlightedRef = useRef(callbacks?.onSpotlighted);
+  onSpotlightedRef.current = callbacks?.onSpotlighted;
+  const onPollNewRef = useRef(callbacks?.onPollNew);
+  onPollNewRef.current = callbacks?.onPollNew;
+  const onPollUpdatedRef = useRef(callbacks?.onPollUpdated);
+  onPollUpdatedRef.current = callbacks?.onPollUpdated;
+  const onPollEndedRef = useRef(callbacks?.onPollEnded);
+  onPollEndedRef.current = callbacks?.onPollEnded;
+  const onBreakoutStartedRef = useRef(callbacks?.onBreakoutStarted);
+  onBreakoutStartedRef.current = callbacks?.onBreakoutStarted;
+  const onBreakoutBroadcastRef = useRef(callbacks?.onBreakoutBroadcast);
+  onBreakoutBroadcastRef.current = callbacks?.onBreakoutBroadcast;
+  const onBreakoutEndedRef = useRef(callbacks?.onBreakoutEnded);
+  onBreakoutEndedRef.current = callbacks?.onBreakoutEnded;
 
   const { localStream, removeRemoteStream, setRemoteStream } = useMediaStore();
   const localStreamRef = useRef<MediaStream | null>(localStream);
@@ -72,6 +125,8 @@ export function useMediasoup(
     updateParticipant,
     setActiveSpeaker,
     setMyParticipantId,
+    setSpotlightParticipant,
+    setMyRole,
   } = useMeetingStore();
   const { sendRequest, handleRpcResponse } = useSignalingRpc(wsRef);
 
@@ -637,6 +692,70 @@ export function useMediasoup(
           }
           break;
         }
+
+        case "participant:roleChanged": {
+          const { participantId, role: newRole } = msg.data || {};
+          if (participantId === myParticipantIdRef.current) {
+            setMyRole(newRole);
+          } else {
+            updateParticipant(participantId, { role: newRole });
+          }
+          if (onRoleChangedRef.current) {
+            onRoleChangedRef.current(participantId, newRole);
+          }
+          break;
+        }
+
+        case "participant:spotlighted": {
+          const { participantId } = msg.data || {};
+          setSpotlightParticipant(participantId || null);
+          if (onSpotlightedRef.current) {
+            onSpotlightedRef.current(participantId || null);
+          }
+          break;
+        }
+
+        case "poll:new": {
+          if (onPollNewRef.current && msg.data?.poll) {
+            onPollNewRef.current(msg.data.poll);
+          }
+          break;
+        }
+
+        case "poll:updated": {
+          if (onPollUpdatedRef.current && msg.data?.poll) {
+            onPollUpdatedRef.current(msg.data.poll);
+          }
+          break;
+        }
+
+        case "poll:ended": {
+          if (onPollEndedRef.current && msg.data) {
+            onPollEndedRef.current(msg.data.pollId, msg.data.poll);
+          }
+          break;
+        }
+
+        case "breakout:started": {
+          if (onBreakoutStartedRef.current && msg.data) {
+            onBreakoutStartedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "breakout:broadcast": {
+          if (onBreakoutBroadcastRef.current && msg.data) {
+            onBreakoutBroadcastRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "breakout:ended": {
+          if (onBreakoutEndedRef.current) {
+            onBreakoutEndedRef.current();
+          }
+          break;
+        }
       }
     };
 
@@ -659,6 +778,8 @@ export function useMediasoup(
     setRemoteStream,
     setActiveSpeaker,
     setMyParticipantId,
+    setSpotlightParticipant,
+    setMyRole,
     createPeerConnection,
     initiatePeerConnection,
   ]);
@@ -681,6 +802,63 @@ export function useMediasoup(
     return sendRequest("participant:muteAll", {});
   }, [sendRequest]);
 
+  const promoteParticipant = useCallback(
+    async (targetParticipantId: string, targetRole: "CO_HOST" | "PARTICIPANT") => {
+      return sendRequest("participant:setRole", { targetParticipantId, role: targetRole });
+    },
+    [sendRequest]
+  );
+
+  const spotlightParticipant = useCallback(
+    async (targetParticipantId: string | null) => {
+      return sendRequest("participant:spotlight", { targetParticipantId });
+    },
+    [sendRequest]
+  );
+
+  const createPoll = useCallback(
+    async (question: string, options: string[]) => {
+      return sendRequest("poll:create", { question, options });
+    },
+    [sendRequest]
+  );
+
+  const votePoll = useCallback(
+    async (pollId: string, optionIndex: number) => {
+      return sendRequest("poll:vote", { pollId, optionIndex });
+    },
+    [sendRequest]
+  );
+
+  const endPoll = useCallback(
+    async (pollId: string) => {
+      return sendRequest("poll:end", { pollId });
+    },
+    [sendRequest]
+  );
+
+  const listPolls = useCallback(async () => {
+    return sendRequest("poll:list", {});
+  }, [sendRequest]);
+
+  const startBreakoutRooms = useCallback(
+    async (rooms: Array<{ id: string; name: string; participantIds: string[] }>, durationMinutes?: number) => {
+      return sendRequest("breakout:start", { rooms, durationMinutes });
+    },
+    [sendRequest]
+  );
+
+  const broadcastToBreakoutRooms = useCallback(
+    async (message: string) => {
+      return sendRequest("breakout:broadcast", { message });
+    },
+    [sendRequest]
+  );
+
+  const endBreakoutRooms = useCallback(async () => {
+    return sendRequest("breakout:end", {});
+  }, [sendRequest]);
+
   return {
     sendRequest,
     toggleAudio,
@@ -691,5 +869,14 @@ export function useMediasoup(
     kickParticipant,
     controlParticipantMedia,
     muteAllParticipants,
+    promoteParticipant,
+    spotlightParticipant,
+    createPoll,
+    votePoll,
+    endPoll,
+    listPolls,
+    startBreakoutRooms,
+    broadcastToBreakoutRooms,
+    endBreakoutRooms,
   };
 }

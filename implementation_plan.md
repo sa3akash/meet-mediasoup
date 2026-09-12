@@ -1,7 +1,5 @@
 # Enterprise Google Meet Platform: Architecture & Implementation Plan
 
-all
-
 A production-grade, distributed, real-time video conferencing platform built with **Next.js (App Router, React 19)**, **ElysiaJS (Bun Runtime)**, **Mediasoup SFU (Multi-Worker WebRTC)**, **PostgreSQL (Drizzle ORM)**, **Redis (Presence, State, Ephemeral Caching)**, and **BullMQ (Background Jobs & Pipelines)**, managed within a **Turborepo monorepo**.
 
 ---

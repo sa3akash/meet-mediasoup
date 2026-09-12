@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: meet-server-service
+  namespace: meet
+  labels:
+    app.kubernetes.io/name: meet-server
+spec:
+  type: ClusterIP
+  selector:
+    app: meet-server
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000
+      protocol: TCP

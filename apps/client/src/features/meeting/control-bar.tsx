@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Users, PhoneOff, ShieldAlert, Lock } from "lucide-react";
+import { MessageSquare, Users, PhoneOff, ShieldAlert, Lock, Shapes } from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { MediaButtons } from "./controls/media-buttons";
 import { ReactionsPicker } from "./controls/reactions-picker";
@@ -40,6 +40,8 @@ export function ControlBar({
     toggleChat,
     isParticipantsListOpen,
     toggleParticipantsList,
+    isActivitiesOpen,
+    toggleActivities,
     participants,
     slug,
     isHost,
@@ -119,6 +121,16 @@ export function ControlBar({
               {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
             </span>
           )}
+        </button>
+
+        <button
+          onClick={toggleActivities}
+          className={`p-3 rounded-xl transition-colors relative ${
+            isActivitiesOpen ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10"
+          }`}
+          title="Activities (Polls & Breakout Rooms)"
+        >
+          <Shapes className="w-5 h-5" />
         </button>
       </div>
     </div>
