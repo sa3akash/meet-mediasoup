@@ -12,8 +12,46 @@ permissions:
   packages: write
 
 jobs:
-  validate:
-    name: Lint, Typecheck & Build
+  # =========================================================================
+  # 1. Path Filter: Detect changes in Client, Server, or Shared Packages
+  # =========================================================================
+  changes:
+    name: Detect Changed Paths
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      client: ${{ steps.filter.outputs.client }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect Changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            server:
+              - 'apps/server/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'bun.lock*'
+              - 'turbo.json'
+              - '.github/workflows/ci.yml'
+            client:
+              - 'apps/client/**'
+              - 'packages/**'
+              - 'package.json'
+              - 'bun.lock*'
+              - 'turbo.json'
+              - '.github/workflows/ci.yml'
+
+  # =========================================================================
+  # 2. Validation: Server
+  # =========================================================================
+  validate-server:
+    name: Validate Server
+    needs: changes
+    if: needs.changes.outputs.server == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -27,22 +65,51 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Typecheck Turborepo Packages
-        run: bun run typecheck
+      - name: Typecheck Server
+        run: bun run --filter server typecheck
 
-      - name: Lint Source Code
-        run: bun run lint
+      - name: Build Server
+        run: bun run --filter server build
 
-      - name: Build Monorepo Workspaces
-        run: bun run build
+  # =========================================================================
+  # 3. Validation: Client
+  # =========================================================================
+  validate-client:
+    name: Validate Client
+    needs: changes
+    if: needs.changes.outputs.client == 'true' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck Client
+        run: bun run --filter client typecheck
+
+      - name: Lint Client
+        run: bun run --filter client lint
+
+      - name: Build Client
+        run: bun run --filter client build
         env:
           NEXT_TELEMETRY_DISABLED: 1
 
-  build-and-push:
-    name: Build & Push Images to GHCR
-    needs: validate
+  # =========================================================================
+  # 4. Build & Push: Server Image
+  # =========================================================================
+  build-and-push-server:
+    name: Build & Push Server Image
+    needs: [changes, validate-server]
+    if: github.event_name == 'push' && (needs.changes.outputs.server == 'true' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -50,10 +117,8 @@ jobs:
       - name: Set lower case repository and owner names
         run: |
           echo "OWNER_LOWER=${OWNER,,}" >> $GITHUB_ENV
-          echo "REPO_LOWER=${REPO,,}" >> $GITHUB_ENV
         env:
           OWNER: '${{ github.repository_owner }}'
-          REPO: '${{ github.repository }}'
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -68,7 +133,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Build & Push Server Image ---
       - name: Extract metadata for Server
         id: meta-server
         uses: docker/metadata-action@v5
@@ -96,7 +160,37 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # --- Build & Push Client Image ---
+  # =========================================================================
+  # 5. Build & Push: Client Image
+  # =========================================================================
+  build-and-push-client:
+    name: Build & Push Client Image
+    needs: [changes, validate-client]
+    if: github.event_name == 'push' && (needs.changes.outputs.client == 'true' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set lower case repository and owner names
+        run: |
+          echo "OWNER_LOWER=${OWNER,,}" >> $GITHUB_ENV
+        env:
+          OWNER: '${{ github.repository_owner }}'
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract metadata for Client
         id: meta-client
         uses: docker/metadata-action@v5

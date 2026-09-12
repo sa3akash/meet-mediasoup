@@ -23,7 +23,7 @@ export const streamingRoutes = new Elysia({ prefix: "/api/streaming" })
         },
       },
       params: t.Object({
-        meetingId: t.String({ description: "Meeting room identifier or slug" }),
+        meetingId: t.String(),
       }),
     }
   )
@@ -103,26 +103,23 @@ export const streamingRoutes = new Elysia({ prefix: "/api/streaming" })
         },
       },
       params: t.Object({
-        meetingId: t.String({ description: "Meeting room identifier or slug" }),
+        meetingId: t.String(),
       }),
       body: t.Object(
         {
           platform: t.Optional(
-            t.Union([t.Literal("YOUTUBE"), t.Literal("FACEBOOK"), t.Literal("CUSTOM_RTMP"), t.String()], {
-              description: "Target platform",
-            })
+            t.Union([t.Literal("YOUTUBE"), t.Literal("FACEBOOK"), t.Literal("CUSTOM_RTMP"), t.String()])
           ),
-          destinationUrl: t.Optional(t.String({ description: "RTMP ingest URL" })),
-          streamKey: t.Optional(t.String({ description: "Platform stream key" })),
+          destinationUrl: t.Optional(t.String()),
+          streamKey: t.Optional(t.String()),
           destinations: t.Optional(
             t.Array(
               t.Object({
                 id: t.Optional(t.String()),
-                platform: t.String({ description: "YOUTUBE | FACEBOOK | CUSTOM_RTMP" }),
-                rtmpUrl: t.String({ description: "RTMP destination URL" }),
-                streamKey: t.String({ description: "Secret stream key" }),
-              }),
-              { description: "Multiple broadcast endpoints for simultaneous multi-destination streaming" }
+                platform: t.String(),
+                rtmpUrl: t.String(),
+                streamKey: t.String(),
+              })
             )
           ),
         },
@@ -157,11 +154,11 @@ export const streamingRoutes = new Elysia({ prefix: "/api/streaming" })
         },
       },
       params: t.Object({
-        meetingId: t.String({ description: "Meeting room identifier or slug" }),
+        meetingId: t.String(),
       }),
       body: t.Optional(
         t.Object({
-          destinationId: t.Optional(t.String({ description: "Specific destination ID to terminate. Omit to stop all." })),
+          destinationId: t.Optional(t.String()),
         })
       ),
     }

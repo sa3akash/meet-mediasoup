@@ -77,20 +77,17 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
       }),
       body: t.Object({
         id: t.String(),
-        type: t.Union(
-          [
-            t.Literal("path"),
-            t.Literal("shape"),
-            t.Literal("sticky"),
-            t.Literal("text"),
-            t.Literal("rectangle"),
-            t.Literal("circle"),
-            t.Literal("line"),
-            t.Literal("arrow"),
-          ],
-          { description: "Type of whiteboard element" }
-        ),
-        data: t.Any({}),
+        type: t.Union([
+          t.Literal("path"),
+          t.Literal("shape"),
+          t.Literal("sticky"),
+          t.Literal("text"),
+          t.Literal("rectangle"),
+          t.Literal("circle"),
+          t.Literal("line"),
+          t.Literal("arrow"),
+        ]),
+        data: t.Any(),
         createdBy: t.Optional(t.String()),
         createdByName: t.Optional(t.String()),
         color: t.Optional(t.String()),
