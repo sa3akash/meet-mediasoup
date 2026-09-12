@@ -25,26 +25,29 @@ RUN bun install
 WORKDIR /app/apps/server
 
 # Build production bundle
-RUN bun build \
-	--compile \
-	--minify-whitespace \
-	--minify-syntax \
-	--outfile server \
-	src/index.ts
+RUN bun run build
 
 # Production Runtime Stage
-FROM gcr.io/distroless/base
+FROM oven/bun:1-debian AS runner
 
 WORKDIR /app
 
-COPY --from=builder /app/server server
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
+ENV PORT=4000
+
+COPY --from=builder /app /app
+
+WORKDIR /app/apps/server
+
+EXPOSE 4000
 
 # Health check probe for container runtime
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
   CMD curl -f http://localhost:4000/health/live || exit 1
 
-CMD ["./server"]
-
-EXPOSE 4000
+CMD ["bun", "run", "dist/index.js"]
