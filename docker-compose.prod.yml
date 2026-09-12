@@ -74,10 +74,10 @@ services:
       - ./docker/coturn/turnserver.conf:/etc/turnserver.conf:ro
 
   server:
-    build:
-      context: .
-      dockerfile: apps/server/Dockerfile
-    # image: ghcr.io/sa3akash/meet-server:latest
+    # build:
+    #   context: .
+    #   dockerfile: apps/server/Dockerfile
+    image: ghcr.io/sa3akash/meet-server:latest
     container_name: meet_server
     restart: unless-stopped
     ports:
@@ -107,10 +107,10 @@ services:
         condition: service_healthy
 
   client:
-    build:
-      context: .
-      dockerfile: apps/client/Dockerfile
-    # image: ghcr.io/sa3akash/meet-client:latest
+    # build:
+    #   context: .
+    #   dockerfile: apps/client/Dockerfile
+    image: ghcr.io/sa3akash/meet-client:latest
     container_name: meet_client
     restart: unless-stopped
     ports:
