@@ -180,7 +180,7 @@ export function useMediasoup(
   } = useMeetingStore();
   const { sendRequest, handleRpcResponse } = useSignalingRpc(wsRef);
 
-  // Audio level monitoring via Web Audio API
+  // Audio level monitoring via Web Audio API for Google Meet speaking detection
   useEffect(() => {
     if (!localStream) return;
     try {
@@ -190,29 +190,69 @@ export function useMediasoup(
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.4;
       const source = audioCtx.createMediaStreamSource(new MediaStream([audioTrack]));
       source.connect(analyser);
 
       const buffer = new Uint8Array(analyser.frequencyBinCount);
+      let wasSpeaking = false;
+      let silenceCounter = 0;
+
       const interval = setInterval(() => {
-        if (useMediaStore.getState().isAudioMuted) return;
+        if (useMediaStore.getState().isAudioMuted) {
+          if (wasSpeaking) {
+            wasSpeaking = false;
+            if (myParticipantIdRef.current) {
+              if (useMeetingStore.getState().activeSpeakerId === myParticipantIdRef.current) {
+                setActiveSpeaker(null);
+              }
+              sendRequest("participant:speaking", { isSpeaking: false }).catch(() => {});
+            }
+          }
+          return;
+        }
+
         analyser.getByteFrequencyData(buffer);
         let sum = 0;
         for (let i = 0; i < buffer.length; i++) sum += buffer[i];
         const average = sum / buffer.length;
-        if (average > 15) {
-          if (myParticipantIdRef.current) {
-            setActiveSpeaker(myParticipantIdRef.current);
+
+        // Active speech threshold
+        if (average > 8) {
+          silenceCounter = 0;
+          if (!wasSpeaking) {
+            wasSpeaking = true;
+            if (myParticipantIdRef.current) {
+              setActiveSpeaker(myParticipantIdRef.current);
+              sendRequest("participant:speaking", { isSpeaking: true }).catch(() => {});
+            }
+          }
+        } else {
+          if (wasSpeaking) {
+            silenceCounter++;
+            // When silent for ~400ms (4 intervals of 100ms)
+            if (silenceCounter >= 4) {
+              wasSpeaking = false;
+              if (myParticipantIdRef.current) {
+                if (useMeetingStore.getState().activeSpeakerId === myParticipantIdRef.current) {
+                  setActiveSpeaker(null);
+                }
+                sendRequest("participant:speaking", { isSpeaking: false }).catch(() => {});
+              }
+            }
           }
         }
-      }, 250);
+      }, 100);
 
       return () => {
         clearInterval(interval);
+        if (wasSpeaking && myParticipantIdRef.current) {
+          sendRequest("participant:speaking", { isSpeaking: false }).catch(() => {});
+        }
         audioCtx.close().catch(() => {});
       };
     } catch {}
-  }, [localStream, setActiveSpeaker]);
+  }, [localStream, sendRequest, setActiveSpeaker]);
 
   // Create or retrieve PeerConnection for a remote peer
   const createPeerConnection = useCallback(
@@ -820,11 +860,7 @@ export function useMediasoup(
         }
 
         case "webrtc:activeSpeaker": {
-          if (msg.data.peerId && msg.data.peerId !== myParticipantIdRef.current) {
-            setActiveSpeaker(msg.data.peerId);
-          } else if (!msg.data.peerId) {
-            setActiveSpeaker(null);
-          }
+          setActiveSpeaker(msg.data?.peerId || null);
           break;
         }
 

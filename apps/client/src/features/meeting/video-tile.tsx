@@ -39,13 +39,24 @@ export function VideoTile({
 
   const hasTrack = !!(stream && stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled);
   const showVideo = !isVideoMuted && hasTrack;
+  const isSpeaking = isActiveSpeaker && !isMuted;
 
   return (
     <div
       className={`relative w-full h-full rounded-2xl overflow-hidden bg-neutral-900 flex items-center justify-center transition-all duration-300 shadow-lg ${
-        isActiveSpeaker ? "ring-2 ring-emerald-500 shadow-emerald-500/20" : "ring-1 ring-white/10"
+        isSpeaking
+          ? "ring-3 ring-emerald-400 shadow-[0_0_24px_rgba(52,211,153,0.35)]"
+          : "ring-1 ring-white/10"
       }`}
     >
+      {/* Top Left: Speaking Badge */}
+      {isSpeaking && (
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/90 border border-emerald-400/50 shadow-lg backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+          <span className="text-[11px] font-semibold text-emerald-300">Speaking</span>
+        </div>
+      )}
+
       {/* Video Stream */}
       <video
         ref={videoRef}
@@ -55,12 +66,20 @@ export function VideoTile({
         className={`w-full h-full object-cover ${!showVideo ? "hidden" : ""} ${isLocal ? "scale-x-[-1]" : ""}`}
       />
 
-      {/* Avatar Fallback */}
+      {/* Avatar Fallback with Google Meet Speaking Ripple Waves */}
       {!showVideo && (
-        <div className="flex flex-col items-center gap-3">
+        <div className="relative flex flex-col items-center gap-3">
+          {/* Animated Acoustic Ripple Rings when speaking */}
+          {isSpeaking && (
+            <>
+              <div className="absolute -inset-6 rounded-full border-2 border-emerald-400/30 animate-ripple-1 pointer-events-none" />
+              <div className="absolute -inset-3 rounded-full border-2 border-emerald-400/60 animate-ripple-2 pointer-events-none" />
+            </>
+          )}
+
           <div
-            className={`w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white text-2xl font-bold shadow-xl transition-all duration-300 ${
-              isActiveSpeaker ? "ring-4 ring-emerald-500 animate-pulse shadow-emerald-500/30" : ""
+            className={`relative z-10 w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white text-2xl font-bold shadow-xl transition-all duration-300 ${
+              isSpeaking ? "ring-4 ring-emerald-400 shadow-emerald-400/40 scale-105" : ""
             }`}
           >
             {avatarUrl ? (
@@ -73,7 +92,7 @@ export function VideoTile({
       )}
 
       {/* Badges & Overlays */}
-      <div className="absolute top-3 right-3 flex items-center gap-2">
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
         {isHandRaised && (
           <div className="bg-amber-500 text-black p-1.5 rounded-full shadow-md animate-bounce">
             <Hand className="w-4 h-4" />
@@ -96,9 +115,18 @@ export function VideoTile({
         )}
       </div>
 
-      {/* Participant Name Badge */}
-      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-xs font-medium border border-white/10">
+      {/* Participant Name Badge + Sound Wave Equalizer */}
+      <div className="absolute bottom-3 left-3 z-10 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg flex items-center gap-2 text-white text-xs font-medium border border-white/10">
         <span>{displayName} {isLocal && "(You)"}</span>
+
+        {/* Google Meet 3-Bar Equalizer Wave */}
+        {isSpeaking && (
+          <div className="flex items-center gap-0.5 h-3.5 px-1 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40">
+            <span className="w-0.5 bg-emerald-400 rounded-full animate-soundwave-1" />
+            <span className="w-0.5 bg-emerald-400 rounded-full animate-soundwave-2" />
+            <span className="w-0.5 bg-emerald-400 rounded-full animate-soundwave-3" />
+          </div>
+        )}
       </div>
     </div>
   );

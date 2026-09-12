@@ -580,6 +580,21 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         break;
       }
 
+      case "participant:speaking": {
+        if (!ws.data.meetingId) break;
+        const { isSpeaking, volume = 100 } = data;
+        broadcastToRoom(ws.data.meetingId, {
+          event: "webrtc:activeSpeaker",
+          data: {
+            peerId: isSpeaking ? ws.data.participantId : null,
+            producerId: null,
+            volume: isSpeaking ? volume : 0,
+          },
+        });
+        if (id) sendResponse(ws, id, { success: true });
+        break;
+      }
+
       case "reaction:add": {
         broadcastToRoom(ws.data.meetingId!, {
           event: "reaction:received",

@@ -7,6 +7,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "allowJs": true,
+    "types": ["bun-types"],
     "checkJs": false,
     "jsx": "preserve",
     "strict": true,

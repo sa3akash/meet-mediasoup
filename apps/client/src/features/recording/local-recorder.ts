@@ -135,7 +135,7 @@ export class LocalRecorder {
       return mixedAudio;
     }
 
-    if (this.options.recordType === "SCREEN_ONLY") {
+    if (this.options.recordType === "SCREEN_ONLY" || this.options.recordType === "COMBINED") {
       let screen = this.options.screenStream;
       if (!screen) {
         for (const rem of this.options.remoteStreams.values()) {
@@ -146,23 +146,47 @@ export class LocalRecorder {
         }
       }
 
+      // Prompt to capture screen or browser tab if no active screen stream or for combined meeting recording
       if (!screen) {
-        // Prompt for screen share
         try {
           screen = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
+            video: {
+              displaySurface: "browser",
+              width: { ideal: 1920 },
+              height: { ideal: 1080 },
+              frameRate: { ideal: 30 },
+            } as any,
             audio: true,
           });
-        } catch {
-          // fallback to canvas if user cancels screen picker
-          return this.createCanvasCompositeStream(mixedAudio);
+        } catch (e) {
+          console.warn("[LocalRecorder] getDisplayMedia cancelled or unavailable, falling back to canvas:", e);
         }
       }
 
-      const composite = new MediaStream();
-      screen.getVideoTracks().forEach((t) => composite.addTrack(t));
-      mixedAudio.getAudioTracks().forEach((t) => composite.addTrack(t));
-      return composite;
+      if (screen && screen.getVideoTracks().length > 0) {
+        const composite = new MediaStream();
+        const videoTrack = screen.getVideoTracks()[0];
+        composite.addTrack(videoTrack);
+
+        // Mix screen audio if present
+        screen.getAudioTracks().forEach((t) => {
+          try {
+            if (this.audioContext) {
+              const src = this.audioContext.createMediaStreamSource(new MediaStream([t]));
+              const dest = this.audioContext.createMediaStreamDestination();
+              src.connect(dest);
+            }
+          } catch {}
+        });
+
+        // Automatically stop recording if the user ends screen sharing
+        videoTrack.addEventListener("ended", () => {
+          this.stop();
+        });
+
+        mixedAudio.getAudioTracks().forEach((t) => composite.addTrack(t));
+        return composite;
+      }
     }
 
     if (this.options.recordType === "VIDEO_ONLY") {
@@ -174,7 +198,7 @@ export class LocalRecorder {
       }
     }
 
-    // COMBINED: Canvas composite with active video tiles & mixed audio
+    // Fallback: Canvas composite with active video tiles & mixed audio
     return this.createCanvasCompositeStream(mixedAudio);
   }
 
