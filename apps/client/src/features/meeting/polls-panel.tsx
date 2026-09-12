@@ -327,9 +327,11 @@ export function PollsPanel({
                       {/* Options / Results */}
                       <div className="space-y-2 mt-3">
                         {poll.options.map((opt, idx) => {
+                          const voteCount = Number(opt.votesCount ?? opt.votes ?? 0);
+                          const total = Number(poll.totalVotes ?? 0);
                           const percentage =
-                            poll.totalVotes > 0
-                              ? Math.round((opt.votes / poll.totalVotes) * 100)
+                            total > 0 && !isNaN(voteCount)
+                              ? Math.round((voteCount / total) * 100)
                               : 0;
                           const isUserPick = poll.userVotedIndex === idx;
 
@@ -382,7 +384,7 @@ export function PollsPanel({
                                   </span>
                                 </div>
                                 <span className="text-[11px] font-semibold text-white/70 shrink-0">
-                                  {percentage}% ({opt.votes})
+                                  {percentage}% ({voteCount})
                                 </span>
                               </div>
                             </div>

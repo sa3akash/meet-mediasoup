@@ -39,7 +39,8 @@ export interface BreakoutStateEvent {
 
 export interface PollOption {
   text: string;
-  votes: number;
+  votes?: number;
+  votesCount?: number;
 }
 
 export interface PollData {

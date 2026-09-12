@@ -450,6 +450,7 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
             id: idx,
             text: opt,
             votesCount: 0,
+            votes: 0,
           })),
           votes: {} as Record<string, number>,
           totalVotes: 0,
@@ -488,7 +489,9 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         poll.votes[voterId] = Number(optionIndex);
 
         poll.options.forEach((opt: any, idx: number) => {
-          opt.votesCount = Object.values(poll.votes).filter((v) => v === idx).length;
+          const count = Object.values(poll.votes).filter((v) => v === idx).length;
+          opt.votesCount = count;
+          opt.votes = count;
         });
         poll.totalVotes = Object.keys(poll.votes).length;
 
