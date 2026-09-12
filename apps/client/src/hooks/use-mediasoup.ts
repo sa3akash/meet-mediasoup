@@ -25,6 +25,11 @@ export interface MediaForcedEvent {
   reason?: string;
 }
 
+export interface ScreenShareOptions {
+  displaySurface?: "monitor" | "window" | "browser";
+  systemAudio?: boolean;
+}
+
 export interface BreakoutRoomInfo {
   id: string;
   name: string;
@@ -353,59 +358,93 @@ export function useMediasoup(
   }, [sendRequest]);
 
   // Start Screen Share
-  const startScreenShare = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { max: 1920 },
-          height: { max: 1080 },
-          frameRate: { max: 30 },
-        },
-        audio: true,
-      });
-      const { setScreenStream, setScreenSharing } = useMediaStore.getState();
-      setScreenStream(stream);
-      setScreenSharing(true);
-
-      const screenTrack = stream.getVideoTracks()[0];
-      const screenAudioTrack = stream.getAudioTracks()[0];
-
-      if (screenTrack) {
-        peerConnectionsRef.current.forEach(async (pc, peerId) => {
-          try {
-            pc.addTrack(screenTrack, stream);
-            if (screenAudioTrack) {
-              pc.addTrack(screenAudioTrack, stream);
-            }
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            sendRequest("webrtc:signal", {
-              to: peerId,
-              signal: { type: "offer", sdp: offer.sdp },
-              appData: {
-                source: "screen",
-                screenTrackId: screenTrack.id,
-                screenStreamId: stream.id,
-              },
-            }).catch(() => {});
-          } catch (e) {
-            console.warn("[WebRTC] Renegotiate screen share failed:", e);
-          }
-        });
-
-        screenTrack.onended = () => {
-          stopScreenShare();
+  const startScreenShare = useCallback(
+    async (options?: ScreenShareOptions) => {
+      try {
+        const constraints: any = {
+          video: {
+            width: { max: 1920 },
+            height: { max: 1080 },
+            frameRate: { max: 30 },
+          },
+          audio: options?.systemAudio !== false,
         };
+
+        if (options?.displaySurface) {
+          constraints.video.displaySurface = options.displaySurface;
+        }
+        if (options?.systemAudio !== false) {
+          constraints.systemAudio = "include";
+        }
+
+        const stream = await navigator.mediaDevices.getDisplayMedia(constraints);
+        const { setScreenStream, setScreenSharing } = useMediaStore.getState();
+        setScreenStream(stream);
+        setScreenSharing(true);
+
+        const screenTrack = stream.getVideoTracks()[0];
+        const screenAudioTrack = stream.getAudioTracks()[0];
+
+        if (screenTrack) {
+          peerConnectionsRef.current.forEach(async (pc, peerId) => {
+            try {
+              pc.addTrack(screenTrack, stream);
+              if (screenAudioTrack) {
+                pc.addTrack(screenAudioTrack, stream);
+              }
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+              sendRequest("webrtc:signal", {
+                to: peerId,
+                signal: { type: "offer", sdp: offer.sdp },
+                appData: {
+                  source: "screen",
+                  screenTrackId: screenTrack.id,
+                  screenStreamId: stream.id,
+                },
+              }).catch(() => {});
+            } catch (e) {
+              console.warn("[WebRTC] Renegotiate screen share failed:", e);
+            }
+          });
+
+          screenTrack.onended = () => {
+            stopScreenShare();
+          };
+        }
+        sendRequest("participant:updateMediaState", {
+          isScreenSharing: true,
+          screenTrackId: screenTrack?.id,
+          screenStreamId: stream.id,
+        }).catch(() => {});
+      } catch (err) {
+        console.warn("[WebRTC] Start screen share cancelled or failed:", err);
       }
-      sendRequest("participant:updateMediaState", {
-        isScreenSharing: true,
-        screenTrackId: screenTrack?.id,
-        screenStreamId: stream.id,
-      }).catch(() => {});
-    } catch (err) {
-      console.warn("[WebRTC] Start screen share cancelled or failed:", err);
+    },
+    [sendRequest, stopScreenShare]
+  );
+
+  // Pause / Resume Screen Share video track
+  const pauseScreenShare = useCallback((paused: boolean) => {
+    const { screenStream } = useMediaStore.getState();
+    if (screenStream) {
+      const videoTrack = screenStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !paused;
+      }
     }
-  }, [sendRequest, stopScreenShare]);
+  }, []);
+
+  // Toggle Screen Share system audio track
+  const toggleScreenAudio = useCallback((muted: boolean) => {
+    const { screenStream } = useMediaStore.getState();
+    if (screenStream) {
+      const audioTrack = screenStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !muted;
+      }
+    }
+  }, []);
 
   // Toggle Screen Share
   const toggleScreenShare = useCallback(async () => {
@@ -879,5 +918,7 @@ export function useMediasoup(
     startBreakoutRooms,
     broadcastToBreakoutRooms,
     endBreakoutRooms,
+    pauseScreenShare,
+    toggleScreenAudio,
   };
 }

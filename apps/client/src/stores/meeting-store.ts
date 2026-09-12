@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { ParticipantDTO } from "@meet/shared-types";
 
-export type VideoLayout = "GRID" | "SPEAKER" | "SPOTLIGHT" | "SIDEBAR";
+export type VideoLayout = "GRID" | "SPEAKER" | "SPOTLIGHT" | "SIDEBAR" | "PRESENTATION";
 
 interface MeetingState {
   meetingId: string | null;
@@ -12,6 +12,8 @@ interface MeetingState {
   activeSpeakerId: string | null;
   pinnedParticipantId: string | null;
   spotlightParticipantId: string | null;
+  activePresenterId: string | null; // Multi-screenshare active presentation ID (or 'local')
+  isTheaterMode: boolean; // Remote presentation mode / theater view
   layoutMode: VideoLayout;
   isChatOpen: boolean;
   isWhiteboardOpen: boolean;
@@ -31,6 +33,9 @@ interface MeetingState {
   setActiveSpeaker: (participantId: string | null) => void;
   setPinnedParticipant: (participantId: string | null) => void;
   setSpotlightParticipant: (participantId: string | null) => void;
+  setActivePresenterId: (presenterId: string | null) => void;
+  toggleTheaterMode: () => void;
+  setTheaterMode: (theater: boolean) => void;
   setLayoutMode: (mode: VideoLayout) => void;
   toggleChat: () => void;
   toggleWhiteboard: () => void;
@@ -51,6 +56,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   activeSpeakerId: null,
   pinnedParticipantId: null,
   spotlightParticipantId: null,
+  activePresenterId: null,
+  isTheaterMode: false,
   layoutMode: "GRID",
   isChatOpen: false,
   isWhiteboardOpen: false,
@@ -94,6 +101,7 @@ export const useMeetingStore = create<MeetingState>((set) => ({
         participants: next,
         activeSpeakerId: state.activeSpeakerId === participantId ? null : state.activeSpeakerId,
         pinnedParticipantId: state.pinnedParticipantId === participantId ? null : state.pinnedParticipantId,
+        activePresenterId: state.activePresenterId === participantId ? null : state.activePresenterId,
       };
     }),
 
@@ -112,6 +120,9 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setActiveSpeaker: (activeSpeakerId) => set({ activeSpeakerId }),
   setPinnedParticipant: (pinnedParticipantId) => set({ pinnedParticipantId }),
   setSpotlightParticipant: (spotlightParticipantId) => set({ spotlightParticipantId }),
+  setActivePresenterId: (activePresenterId) => set({ activePresenterId }),
+  toggleTheaterMode: () => set((s) => ({ isTheaterMode: !s.isTheaterMode })),
+  setTheaterMode: (isTheaterMode) => set({ isTheaterMode }),
   setLayoutMode: (layoutMode) => set({ layoutMode }),
   toggleChat: () => set((s) => ({ isChatOpen: !s.isChatOpen })),
   toggleWhiteboard: () => set((s) => ({ isWhiteboardOpen: !s.isWhiteboardOpen })),
@@ -132,6 +143,8 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       activeSpeakerId: null,
       pinnedParticipantId: null,
       spotlightParticipantId: null,
+      activePresenterId: null,
+      isTheaterMode: false,
       layoutMode: "GRID",
       isChatOpen: false,
       isWhiteboardOpen: false,

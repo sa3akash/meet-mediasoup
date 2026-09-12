@@ -11,6 +11,8 @@ import { ChatPanel } from "../chat/chat-panel";
 import { ParticipantsPanel } from "./participants-panel";
 import { PollsPanel } from "./polls-panel";
 import { BreakoutRoomsModal } from "./breakout-rooms-modal";
+import { ScreenShareModal } from "./screen-share-modal";
+import { PresenterControlDock } from "./presenter-control-dock";
 import { HostControlsModal } from "../meetings/host-controls-modal";
 import { WaitingRoomManager } from "../meetings/waiting-room-manager";
 import { useMeetingStore } from "../../stores/meeting-store";
@@ -91,6 +93,9 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     message: string;
     from: string;
   } | null>(null);
+
+  // Screen Share Modal State
+  const [isScreenShareModalOpen, setIsScreenShareModalOpen] = useState(false);
 
   const {
     isChatOpen,
@@ -212,6 +217,10 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
+    startScreenShare,
+    stopScreenShare,
+    pauseScreenShare,
+    toggleScreenAudio,
     kickParticipant,
     controlParticipantMedia,
     muteAllParticipants,
@@ -531,6 +540,20 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         onStartBreakout={startBreakoutRooms}
       />
 
+      {/* Presenter Floating Control Dock */}
+      <PresenterControlDock
+        onStopShare={stopScreenShare}
+        onPauseShare={pauseScreenShare}
+        onToggleAudio={toggleScreenAudio}
+      />
+
+      {/* Screen Share Surface & Audio Picker Modal */}
+      <ScreenShareModal
+        isOpen={isScreenShareModalOpen}
+        onClose={() => setIsScreenShareModalOpen(false)}
+        onStartShare={startScreenShare}
+      />
+
       {/* Floating In-Call Message Toast Notification (Google Meet Style) */}
       {latestMessageToast && !isChatOpen && (
         <div
@@ -573,6 +596,13 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         onToggleAudio={toggleAudio}
         onToggleVideo={toggleVideo}
         onToggleScreenShare={toggleScreenShare}
+        onOpenScreenShareModal={() => {
+          if (useMediaStore.getState().isScreenSharing) {
+            stopScreenShare();
+          } else {
+            setIsScreenShareModalOpen(true);
+          }
+        }}
         onToggleHandRaise={handleToggleHandRaise}
         disableScreenShare={!isHost && meetingSettings.disableScreenShare}
         disableReactions={!isHost && meetingSettings.disableReactions}

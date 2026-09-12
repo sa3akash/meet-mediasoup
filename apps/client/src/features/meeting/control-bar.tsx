@@ -4,6 +4,7 @@ import { MessageSquare, Users, PhoneOff, ShieldAlert, Lock, Shapes } from "lucid
 import { useMeetingStore } from "../../stores/meeting-store";
 import { MediaButtons } from "./controls/media-buttons";
 import { ReactionsPicker } from "./controls/reactions-picker";
+import { LayoutSwitcher } from "./layout-switcher";
 
 interface ControlBarProps {
   onLeave: () => void;
@@ -12,6 +13,7 @@ interface ControlBarProps {
   onToggleAudio?: () => void;
   onToggleVideo?: () => void;
   onToggleScreenShare?: () => void;
+  onOpenScreenShareModal?: () => void;
   onToggleHandRaise?: () => void;
   disableScreenShare?: boolean;
   disableReactions?: boolean;
@@ -27,6 +29,7 @@ export function ControlBar({
   onToggleAudio,
   onToggleVideo,
   onToggleScreenShare,
+  onOpenScreenShareModal,
   onToggleHandRaise,
   disableScreenShare,
   disableReactions,
@@ -67,7 +70,7 @@ export function ControlBar({
           disableScreenShare={disableScreenShare}
           onToggleAudio={onToggleAudio}
           onToggleVideo={onToggleVideo}
-          onToggleScreenShare={onToggleScreenShare}
+          onToggleScreenShare={onOpenScreenShareModal || onToggleScreenShare}
           onToggleHandRaise={onToggleHandRaise}
         />
         {!disableReactions && <ReactionsPicker onSelectEmoji={onSendReaction} />}
@@ -85,6 +88,8 @@ export function ControlBar({
 
       {/* Right: Sidebars & Toggles */}
       <div className="flex items-center gap-2">
+        <LayoutSwitcher />
+
         {Boolean(isHost && onOpenHostControls) && (
           <button
             onClick={onOpenHostControls}
