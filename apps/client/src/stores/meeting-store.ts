@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ParticipantDTO } from "@meet/shared-types";
+import type { ParticipantDTO, ParticipantRole } from "@meet/shared-types";
 
 export type VideoLayout = "GRID" | "SPEAKER" | "SPOTLIGHT" | "SIDEBAR" | "PRESENTATION";
 
@@ -20,28 +20,45 @@ interface MeetingState {
   isParticipantsListOpen: boolean;
   isActivitiesOpen: boolean;
   isHandRaised: boolean;
+
+  // Chat additions
+  pinnedMessage: any | null;
+  mutedChatUserIds: string[];
+
+  // Recording state
+  isRecording: boolean;
+  recordingType: "CLOUD" | "LOCAL" | null;
+  recordingDuration: number;
+  recordingDownloadUrl: string | null;
+
   myParticipantId: string | null;
   myRole: string;
 
   setMeeting: (meeting: { id: string; slug: string; title: string; isHost: boolean }) => void;
-  setMyParticipantId: (id: string | null) => void;
-  setMyRole: (role: string) => void;
-  setIsHost: (isHost: boolean) => void;
-  addParticipant: (participant: ParticipantDTO) => void;
+  setMyParticipantId: (id: string) => void;
+  addParticipant: (participant: any) => void;
   removeParticipant: (participantId: string) => void;
-  updateParticipant: (participantId: string, updates: Partial<ParticipantDTO>) => void;
-  setActiveSpeaker: (participantId: string | null) => void;
-  setPinnedParticipant: (participantId: string | null) => void;
-  setSpotlightParticipant: (participantId: string | null) => void;
-  setActivePresenterId: (presenterId: string | null) => void;
+  updateParticipant: (participantId: string, updates: any) => void;
+  setActiveSpeaker: (id: string | null) => void;
+  setPinnedParticipant: (id: string | null) => void;
+  setSpotlightParticipant: (id: string | null) => void;
+  setActivePresenterId: (id: string | null) => void;
   toggleTheaterMode: () => void;
-  setTheaterMode: (theater: boolean) => void;
+  setTheaterMode: (isTheaterMode: boolean) => void;
   setLayoutMode: (mode: VideoLayout) => void;
   toggleChat: () => void;
   toggleWhiteboard: () => void;
   toggleParticipantsList: () => void;
   toggleActivities: () => void;
   setHandRaised: (raised: boolean) => void;
+  setMyRole: (role: ParticipantRole) => void;
+  setIsHost: (isHost: boolean) => void;
+
+  setPinnedMessage: (message: any | null) => void;
+  setChatUserMuted: (participantId: string, muted: boolean) => void;
+  setRecordingState: (isRecording: boolean, type?: "CLOUD" | "LOCAL" | null) => void;
+  setRecordingDuration: (duration: number) => void;
+  setRecordingDownloadUrl: (url: string | null) => void;
   reset: () => void;
 }
 
@@ -64,6 +81,13 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   isParticipantsListOpen: false,
   isActivitiesOpen: false,
   isHandRaised: false,
+
+  pinnedMessage: null,
+  mutedChatUserIds: [],
+  isRecording: false,
+  recordingType: null,
+  recordingDuration: 0,
+  recordingDownloadUrl: null,
 
   setMeeting: ({ id, slug, title, isHost }) =>
     set({ meetingId: id, slug, title, isHost }),
@@ -132,6 +156,19 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setMyRole: (myRole) => set({ myRole, isHost: myRole === "HOST" || myRole === "CO_HOST" }),
   setIsHost: (isHost) => set({ isHost }),
 
+  setPinnedMessage: (pinnedMessage) => set({ pinnedMessage }),
+  setChatUserMuted: (participantId, muted) =>
+    set((state) => {
+      const setIds = new Set(state.mutedChatUserIds);
+      if (muted) setIds.add(participantId);
+      else setIds.delete(participantId);
+      return { mutedChatUserIds: Array.from(setIds) };
+    }),
+  setRecordingState: (isRecording, recordingType = null) =>
+    set({ isRecording, recordingType: isRecording ? recordingType : null, recordingDuration: isRecording ? 0 : 0 }),
+  setRecordingDuration: (recordingDuration) => set({ recordingDuration }),
+  setRecordingDownloadUrl: (recordingDownloadUrl) => set({ recordingDownloadUrl }),
+
   reset: () =>
     set({
       meetingId: null,
@@ -151,5 +188,11 @@ export const useMeetingStore = create<MeetingState>((set) => ({
       isParticipantsListOpen: false,
       isActivitiesOpen: false,
       isHandRaised: false,
+      pinnedMessage: null,
+      mutedChatUserIds: [],
+      isRecording: false,
+      recordingType: null,
+      recordingDuration: 0,
+      recordingDownloadUrl: null,
     }),
 }));

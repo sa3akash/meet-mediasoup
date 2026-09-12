@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/refs */
 "use client";
 
@@ -75,6 +74,13 @@ interface UseMediasoupCallbacks {
   onBreakoutStarted?: (data: BreakoutStateEvent) => void;
   onBreakoutBroadcast?: (data: { message: string; from: string }) => void;
   onBreakoutEnded?: () => void;
+  onChatHistory?: (messages: any[]) => void;
+  onChatReacted?: (data: any) => void;
+  onChatMessageDeleted?: (data: { messageId: string }) => void;
+  onChatMessagePinned?: (data: { messageId: string; isPinned: boolean; message: any }) => void;
+  onChatUserMuted?: (data: { targetParticipantId: string; muted: boolean; by: string }) => void;
+  onRecordingStarted?: (data: { recordingId: string; startedAt: string; recordType: string; by: string }) => void;
+  onRecordingStopped?: (data: any) => void;
 }
 
 export function useMediasoup(
@@ -120,6 +126,20 @@ export function useMediasoup(
   onBreakoutBroadcastRef.current = callbacks?.onBreakoutBroadcast;
   const onBreakoutEndedRef = useRef(callbacks?.onBreakoutEnded);
   onBreakoutEndedRef.current = callbacks?.onBreakoutEnded;
+  const onChatHistoryRef = useRef(callbacks?.onChatHistory);
+  onChatHistoryRef.current = callbacks?.onChatHistory;
+  const onChatReactedRef = useRef(callbacks?.onChatReacted);
+  onChatReactedRef.current = callbacks?.onChatReacted;
+  const onChatMessageDeletedRef = useRef(callbacks?.onChatMessageDeleted);
+  onChatMessageDeletedRef.current = callbacks?.onChatMessageDeleted;
+  const onChatMessagePinnedRef = useRef(callbacks?.onChatMessagePinned);
+  onChatMessagePinnedRef.current = callbacks?.onChatMessagePinned;
+  const onChatUserMutedRef = useRef(callbacks?.onChatUserMuted);
+  onChatUserMutedRef.current = callbacks?.onChatUserMuted;
+  const onRecordingStartedRef = useRef(callbacks?.onRecordingStarted);
+  onRecordingStartedRef.current = callbacks?.onRecordingStarted;
+  const onRecordingStoppedRef = useRef(callbacks?.onRecordingStopped);
+  onRecordingStoppedRef.current = callbacks?.onRecordingStopped;
 
   const { localStream, removeRemoteStream, setRemoteStream } = useMediaStore();
   const localStreamRef = useRef<MediaStream | null>(localStream);
@@ -473,6 +493,9 @@ export function useMediasoup(
 
         myParticipantIdRef.current = joinRes.participantId;
         setMyParticipantId(joinRes.participantId);
+        if (joinRes.role) {
+          setMyRole(joinRes.role);
+        }
 
         // 1. Immediately populate existing participants
         if (joinRes.existingParticipants && Array.isArray(joinRes.existingParticipants)) {
@@ -497,6 +520,12 @@ export function useMediasoup(
             }
           }
         }
+        if (joinRes.chatHistory && onChatHistoryRef.current) {
+          onChatHistoryRef.current(joinRes.chatHistory);
+        }
+        if (joinRes.activeRecording && onRecordingStartedRef.current) {
+          onRecordingStartedRef.current(joinRes.activeRecording);
+        }
       } catch (err) {
         console.error("[WebRTC] Join setup failed:", err);
       }
@@ -510,6 +539,48 @@ export function useMediasoup(
         case "chat:message": {
           if (onChatMessageRef.current) {
             onChatMessageRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "chat:reacted": {
+          if (onChatReactedRef.current) {
+            onChatReactedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "chat:messageDeleted": {
+          if (onChatMessageDeletedRef.current) {
+            onChatMessageDeletedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "chat:messagePinned": {
+          if (onChatMessagePinnedRef.current) {
+            onChatMessagePinnedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "chat:userMuted": {
+          if (onChatUserMutedRef.current) {
+            onChatUserMutedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "recording:started": {
+          if (onRecordingStartedRef.current) {
+            onRecordingStartedRef.current(msg.data);
+          }
+          break;
+        }
+
+        case "recording:stopped": {
+          if (onRecordingStoppedRef.current) {
+            onRecordingStoppedRef.current(msg.data);
           }
           break;
         }
@@ -899,6 +970,68 @@ export function useMediasoup(
     return sendRequest("breakout:end", {});
   }, [sendRequest]);
 
+  const sendChatMessage = useCallback(
+    async (
+      content: string,
+      options?: { attachment?: any; replyTo?: any; mentions?: string[]; linkPreview?: any }
+    ) => {
+      return sendRequest("chat:send", {
+        content,
+        attachment: options?.attachment,
+        replyTo: options?.replyTo,
+        mentions: options?.mentions,
+        linkPreview: options?.linkPreview,
+      });
+    },
+    [sendRequest]
+  );
+
+  const reactToChatMessage = useCallback(
+    async (messageId: string, emoji: string) => {
+      return sendRequest("chat:react", { messageId, emoji });
+    },
+    [sendRequest]
+  );
+
+  const deleteChatMessage = useCallback(
+    async (messageId: string) => {
+      return sendRequest("chat:delete", { messageId });
+    },
+    [sendRequest]
+  );
+
+  const pinChatMessage = useCallback(
+    async (messageId: string, isPinned: boolean) => {
+      return sendRequest("chat:pin", { messageId, isPinned });
+    },
+    [sendRequest]
+  );
+
+  const muteChatParticipant = useCallback(
+    async (targetParticipantId: string, muted: boolean) => {
+      return sendRequest("chat:muteUser", { targetParticipantId, muted });
+    },
+    [sendRequest]
+  );
+
+  const exportMeetingChat = useCallback(
+    async (format: "txt" | "json" = "txt") => {
+      return sendRequest("chat:export", { format });
+    },
+    [sendRequest]
+  );
+
+  const startCloudRecording = useCallback(
+    async (recordType: "COMBINED" | "AUDIO_ONLY" | "VIDEO_ONLY" | "SCREEN_ONLY" = "COMBINED") => {
+      return sendRequest("recording:start", { recordType });
+    },
+    [sendRequest]
+  );
+
+  const stopCloudRecording = useCallback(async () => {
+    return sendRequest("recording:stop", {});
+  }, [sendRequest]);
+
   return {
     sendRequest,
     toggleAudio,
@@ -920,5 +1053,13 @@ export function useMediasoup(
     endBreakoutRooms,
     pauseScreenShare,
     toggleScreenAudio,
+    sendChatMessage,
+    reactToChatMessage,
+    deleteChatMessage,
+    pinChatMessage,
+    muteChatParticipant,
+    exportMeetingChat,
+    startCloudRecording,
+    stopCloudRecording,
   };
 }

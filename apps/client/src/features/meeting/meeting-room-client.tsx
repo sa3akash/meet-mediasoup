@@ -1,45 +1,31 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PreJoinLobby } from "../lobby/pre-join-lobby";
 import { MeetingGrid } from "./meeting-grid";
 import { ControlBar } from "./control-bar";
-import { ChatPanel } from "../chat/chat-panel";
+import { ChatPanel, type Message, type MessageAttachment } from "../chat/chat-panel";
 import { ParticipantsPanel } from "./participants-panel";
 import { PollsPanel } from "./polls-panel";
 import { BreakoutRoomsModal } from "./breakout-rooms-modal";
 import { ScreenShareModal } from "./screen-share-modal";
 import { PresenterControlDock } from "./presenter-control-dock";
+import { Disc } from "lucide-react";
 import { HostControlsModal } from "../meetings/host-controls-modal";
 import { WaitingRoomManager } from "../meetings/waiting-room-manager";
+import { RecordingModal } from "../recording/recording-modal";
+import { LocalRecorder } from "../recording/local-recorder";
+import {
+  BreakoutStateEvent,
+  MediaForcedEvent,
+  PollData,
+  useMediasoup,
+} from "../../hooks/use-mediasoup";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { useMediaStore } from "../../stores/media-store";
-import {
-  useMediasoup,
-  type MediaForcedEvent,
-  type PollData,
-  type BreakoutStateEvent,
-} from "../../hooks/use-mediasoup";
-import { Disc, PhoneOff, X, UserX, Mic, MicOff, Video, VideoOff, Megaphone } from "lucide-react";
-
-export interface MessageAttachment {
-  name: string;
-  size: number;
-  type: string;
-  url: string;
-}
-
-export interface Message {
-  id: string;
-  senderName: string;
-  content: string;
-  createdAt: string;
-  isSelf?: boolean;
-  attachment?: MessageAttachment;
-}
+import { PhoneOff, X, UserX, Mic, MicOff, Video, Megaphone } from "lucide-react";
 
 interface MeetingRoomClientProps {
   slug: string;
@@ -106,8 +92,20 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     isHost,
     setMeeting,
     reset: resetMeeting,
+    isRecording,
+    recordingType,
+    recordingDuration,
+    setRecordingState,
+    setRecordingDuration,
+    setRecordingDownloadUrl,
+    setPinnedMessage,
+    setChatUserMuted,
   } = useMeetingStore();
   const { resetMedia } = useMediaStore();
+
+  const [isRecordingModalOpen, setIsRecordingModalOpen] = useState(false);
+  const [localDuration, setLocalDuration] = useState(0);
+  const localRecorderRef = useRef<LocalRecorder | null>(null);
 
   const isMeetingHost = Boolean(
     (currentUser?.id && initialMeeting?.hostId && currentUser.id === initialMeeting.hostId) ||
@@ -123,6 +121,11 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       createdAt: msg.createdAt || new Date().toISOString(),
       isSelf: false,
       attachment: msg.attachment,
+      replyTo: msg.replyTo,
+      mentions: msg.mentions,
+      linkPreview: msg.linkPreview,
+      reactions: msg.reactions || {},
+      isPinned: msg.isPinned || false,
     };
     setMessages((prev) => {
       if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -233,6 +236,14 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     startBreakoutRooms,
     broadcastToBreakoutRooms,
     endBreakoutRooms,
+    sendChatMessage,
+    reactToChatMessage,
+    deleteChatMessage,
+    pinChatMessage,
+    muteChatParticipant,
+    exportMeetingChat,
+    startCloudRecording,
+    stopCloudRecording,
   } = useMediasoup(
     hasJoined ? slug : "",
     displayName,
@@ -250,6 +261,43 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       onBreakoutStarted: handleBreakoutStarted,
       onBreakoutBroadcast: handleBreakoutBroadcast,
       onBreakoutEnded: handleBreakoutEnded,
+      onChatHistory: (history: any[]) => {
+        if (Array.isArray(history)) {
+          setMessages(history.map((m) => ({ ...m, isSelf: m.senderId === useMeetingStore.getState().myParticipantId })));
+        }
+      },
+      onChatReacted: (data: any) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === data.messageId ? { ...m, reactions: data.reactions } : m))
+        );
+      },
+      onChatMessageDeleted: (data: any) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === data.messageId
+              ? { ...m, isDeleted: true, content: "This message was deleted.", attachment: undefined }
+              : m
+          )
+        );
+      },
+      onChatMessagePinned: (data: any) => {
+        setPinnedMessage(data.isPinned ? data.message : null);
+        setMessages((prev) =>
+          prev.map((m) => ({ ...m, isPinned: m.id === data.messageId ? data.isPinned : false }))
+        );
+      },
+      onChatUserMuted: (data: any) => {
+        setChatUserMuted(data.targetParticipantId, data.muted);
+      },
+      onRecordingStarted: () => {
+        setRecordingState(true, "CLOUD");
+      },
+      onRecordingStopped: (data: any) => {
+        setRecordingState(false, null);
+        if (data?.mp4Url) {
+          setRecordingDownloadUrl(data.mp4Url);
+        }
+      },
     },
     isMeetingHost ? "HOST" : "PARTICIPANT"
   );
@@ -289,7 +337,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     if (!breakoutState?.rooms) return null;
     const myPid = useMeetingStore.getState().myParticipantId;
     if (!myPid) return null;
-    return breakoutState.rooms.find((r) => r.participantIds.includes(myPid)) || null;
+    return breakoutState.rooms.find((r: any) => r.participantIds.includes(myPid)) || null;
   }, [breakoutState]);
 
   const handleLeave = () => {
@@ -298,7 +346,15 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     router.push("/meetings");
   };
 
-  const handleSendMessage = async (content: string, attachment?: MessageAttachment) => {
+  const handleSendMessage = async (
+    content: string,
+    options?: {
+      attachment?: MessageAttachment;
+      replyTo?: any;
+      mentions?: string[];
+      linkPreview?: any;
+    }
+  ) => {
     const msgId = crypto.randomUUID();
     const newMsg: Message = {
       id: msgId,
@@ -306,16 +362,110 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       content,
       createdAt: new Date().toISOString(),
       isSelf: true,
-      attachment,
+      attachment: options?.attachment,
+      replyTo: options?.replyTo,
+      mentions: options?.mentions,
+      linkPreview: options?.linkPreview,
     };
     setMessages((prev) => [...prev, newMsg]);
 
     try {
-      await sendRequest("chat:send", { content, id: msgId, attachment });
-    } catch (err) {
+      await sendChatMessage(content, {
+        attachment: options?.attachment,
+        replyTo: options?.replyTo,
+        mentions: options?.mentions,
+        linkPreview: options?.linkPreview,
+      });
+    } catch (err: any) {
       console.warn("[Chat] Failed to send message:", err);
+      alert(err.message || "Failed to send message");
     }
   };
+
+  const handleReactMessage = useCallback((messageId: string, emoji: string) => {
+    reactToChatMessage(messageId, emoji).catch(() => {});
+  }, [reactToChatMessage]);
+
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    deleteChatMessage(messageId).catch(() => {});
+  }, [deleteChatMessage]);
+
+  const handlePinMessage = useCallback((messageId: string, isPinned: boolean) => {
+    pinChatMessage(messageId, isPinned).catch(() => {});
+  }, [pinChatMessage]);
+
+  const handleMuteUser = useCallback((participantId: string, muted: boolean) => {
+    muteChatParticipant(participantId, muted).catch(() => {});
+  }, [muteChatParticipant]);
+
+  const handleExportChat = useCallback((format: "txt" | "json") => {
+    exportMeetingChat(format)
+      .then((res: any) => {
+        if (res?.transcript) {
+          const blob = new Blob([res.transcript], {
+            type: format === "json" ? "application/json" : "text/plain",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `meeting-${slug}-chat.${format}`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+      })
+      .catch(() => {});
+  }, [exportMeetingChat, slug]);
+
+  const handleStartCloudRecording = useCallback(async (recordType: any) => {
+    await startCloudRecording(recordType);
+    setRecordingState(true, "CLOUD");
+  }, [startCloudRecording, setRecordingState]);
+
+  const handleStopCloudRecording = useCallback(async () => {
+    const res = await stopCloudRecording();
+    setRecordingState(false, null);
+    if (res?.mp4Url) {
+      setRecordingDownloadUrl(res.mp4Url);
+    }
+    return res;
+  }, [stopCloudRecording, setRecordingState, setRecordingDownloadUrl]);
+
+  const handleStartLocalRecording = useCallback(async (recordType: any) => {
+    const { localStream, screenStream, remoteStreams } = useMediaStore.getState();
+    const recorder = new LocalRecorder({
+      recordType,
+      localStream,
+      screenStream,
+      remoteStreams,
+      meetingTitle: initialMeeting?.title || slug,
+      onDurationUpdate: (secs) => setLocalDuration(secs),
+      onStop: (downloadUrl) => {
+        setRecordingDownloadUrl(downloadUrl);
+        setRecordingState(false, null);
+      },
+    });
+
+    await recorder.start();
+    localRecorderRef.current = recorder;
+    setRecordingState(true, "LOCAL");
+  }, [initialMeeting, slug, setRecordingDownloadUrl, setRecordingState]);
+
+  const handleStopLocalRecording = useCallback(() => {
+    if (localRecorderRef.current) {
+      localRecorderRef.current.stop();
+      localRecorderRef.current = null;
+    }
+    setRecordingState(false, null);
+  }, [setRecordingState]);
+
+  useEffect(() => {
+    if (isRecording && recordingType === "CLOUD") {
+      const interval = setInterval(() => {
+        setRecordingDuration(useMeetingStore.getState().recordingDuration + 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isRecording, recordingType, setRecordingDuration]);
 
   const handleSendReaction = (emoji: string) => {
     if (!isHost && meetingSettings.disableReactions) return;
@@ -471,6 +621,11 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         {isChatOpen && (
           <ChatPanel
             onSendMessage={handleSendMessage}
+            onReactMessage={handleReactMessage}
+            onDeleteMessage={handleDeleteMessage}
+            onPinMessage={handlePinMessage}
+            onMuteUser={handleMuteUser}
+            onExportChat={handleExportChat}
             messages={messages}
             disableChat={!isHost && meetingSettings.disableChat}
             disableFileShare={!isHost && meetingSettings.disableFileShare}
@@ -522,9 +677,32 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         </div>
       )}
 
+      {/* Live Recording Badge at Top Left */}
+      {isRecording && (
+        <div
+          onClick={() => setIsRecordingModalOpen(true)}
+          className="absolute top-4 left-6 z-40 bg-red-950/90 border border-red-500/40 text-white rounded-full px-3.5 py-1.5 shadow-xl backdrop-blur-md flex items-center gap-2 cursor-pointer hover:bg-red-900/90 transition-all animate-pulse"
+        >
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+          <span className="text-xs font-mono font-bold text-red-300">REC</span>
+          <span className="text-xs font-mono text-white/90">
+            {Math.floor((recordingType === "LOCAL" ? localDuration : recordingDuration) / 60)
+              .toString()
+              .padStart(2, "0")}
+            :
+            {((recordingType === "LOCAL" ? localDuration : recordingDuration) % 60)
+              .toString()
+              .padStart(2, "0")}
+          </span>
+          <span className="text-[10px] text-red-300/70 capitalize">
+            ({recordingType?.toLowerCase()})
+          </span>
+        </div>
+      )}
+
       {/* Breakout Room Indicator Bar (if assigned to breakout room) */}
       {currentBreakoutRoom && (
-        <div className="absolute top-4 left-6 z-40 bg-neutral-900/90 border border-indigo-500/30 text-white rounded-2xl px-4 py-2 shadow-xl backdrop-blur-md flex items-center gap-3">
+        <div className="absolute top-4 left-44 z-40 bg-neutral-900/90 border border-indigo-500/30 text-white rounded-2xl px-4 py-2 shadow-xl backdrop-blur-md flex items-center gap-3">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-xs font-semibold text-white">
             {currentBreakoutRoom.name}
@@ -589,6 +767,17 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         </div>
       )}
 
+      {/* Recording Setup & Controller Modal */}
+      <RecordingModal
+        isOpen={isRecordingModalOpen}
+        onClose={() => setIsRecordingModalOpen(false)}
+        onStartCloudRecording={handleStartCloudRecording}
+        onStopCloudRecording={handleStopCloudRecording}
+        onStartLocalRecording={handleStartLocalRecording}
+        onStopLocalRecording={handleStopLocalRecording}
+        localDuration={localDuration}
+      />
+
       <ControlBar
         onLeave={handleLeave}
         onSendReaction={handleSendReaction}
@@ -603,6 +792,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
             setIsScreenShareModalOpen(true);
           }
         }}
+        onOpenRecordingModal={() => setIsRecordingModalOpen(true)}
         onToggleHandRaise={handleToggleHandRaise}
         disableScreenShare={!isHost && meetingSettings.disableScreenShare}
         disableReactions={!isHost && meetingSettings.disableReactions}

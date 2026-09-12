@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare, Users, PhoneOff, ShieldAlert, Lock, Shapes } from "lucide-react";
+import { MessageSquare, Users, PhoneOff, ShieldAlert, Lock, Shapes, Radio } from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { MediaButtons } from "./controls/media-buttons";
 import { ReactionsPicker } from "./controls/reactions-picker";
@@ -14,6 +14,7 @@ interface ControlBarProps {
   onToggleVideo?: () => void;
   onToggleScreenShare?: () => void;
   onOpenScreenShareModal?: () => void;
+  onOpenRecordingModal?: () => void;
   onToggleHandRaise?: () => void;
   disableScreenShare?: boolean;
   disableReactions?: boolean;
@@ -30,6 +31,7 @@ export function ControlBar({
   onToggleVideo,
   onToggleScreenShare,
   onOpenScreenShareModal,
+  onOpenRecordingModal,
   onToggleHandRaise,
   disableScreenShare,
   disableReactions,
@@ -48,6 +50,7 @@ export function ControlBar({
     participants,
     slug,
     isHost,
+    isRecording,
   } = useMeetingStore();
 
   return (
@@ -89,6 +92,21 @@ export function ControlBar({
       {/* Right: Sidebars & Toggles */}
       <div className="flex items-center gap-2">
         <LayoutSwitcher />
+
+        {onOpenRecordingModal && (
+          <button
+            onClick={onOpenRecordingModal}
+            className={`p-3 rounded-xl transition-all relative flex items-center gap-1.5 ${
+              isRecording
+                ? "bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse"
+                : "text-white/70 hover:text-white hover:bg-white/10"
+            }`}
+            title={isRecording ? "Recording in progress" : "Record meeting"}
+          >
+            <Radio className="w-5 h-5" />
+            {isRecording && <span className="text-xs font-mono font-bold">REC</span>}
+          </button>
+        )}
 
         {Boolean(isHost && onOpenHostControls) && (
           <button

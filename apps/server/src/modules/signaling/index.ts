@@ -23,6 +23,8 @@ import {
   participantSockets,
 } from "./socket-registry";
 import { handleWebRtcMessage } from "./handlers/webrtc-handlers";
+import { chatService, type ChatMessage } from "../chat/chat-service";
+import { recordingService } from "../recordings/recording-service";
 
 // Listen to audioObserverService to broadcast active speaker changes
 audioObserverService.on("activeSpeaker", ({ roomId, producerId, peerId, volume }) => {
@@ -83,7 +85,16 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         ws.data.participantId = ws.data.participantId || crypto.randomUUID();
         ws.data.userId = userId;
         ws.data.displayName = displayName;
-        ws.data.role = role;
+        const allParticipants = await getRoomParticipants(meetingId);
+        const existingParticipants = allParticipants.filter(
+          (p: any) => (p.id || p.participantId) !== ws.data.participantId
+        );
+
+        let effectiveRole = role;
+        if (role === "PARTICIPANT" && existingParticipants.length === 0) {
+          effectiveRole = "HOST";
+        }
+        ws.data.role = effectiveRole;
 
         registerSocket(meetingId, ws);
 
@@ -92,7 +103,7 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
           participantId: ws.data.participantId,
           userId,
           displayName,
-          role,
+          role: effectiveRole,
           isAudioMuted: false,
           isVideoMuted: false,
           isScreenSharing: false,
@@ -106,10 +117,9 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
 
         const rtpCapabilities = await roomManager.getRouterCapabilities(meetingId);
         const existingProducers = roomManager.getRoomProducers(meetingId, ws.data.participantId);
-        const allParticipants = await getRoomParticipants(meetingId);
-        const existingParticipants = allParticipants.filter(
-          (p: any) => (p.id || p.participantId) !== ws.data.participantId
-        );
+
+        const activeRecording = recordingService.getActiveRecording(meetingId);
+        const chatHistory = await chatService.getHistory(meetingId);
 
         sendResponse(ws, id, {
           participantId: ws.data.participantId,
@@ -117,6 +127,8 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
           rtpCapabilities,
           existingProducers,
           existingParticipants,
+          activeRecording,
+          chatHistory,
         });
 
         broadcastToRoom(meetingId, {
@@ -183,20 +195,247 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
       }
 
       case "chat:send": {
-        const messagePayload = {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        if (chatService.isUserMuted(ws.data.meetingId, ws.data.participantId!)) {
+          sendError(ws, id, 403, "You have been muted in the chat by the host.");
+          break;
+        }
+
+        const content = data.content || "";
+        const linkPreview = data.linkPreview || chatService.extractLinkPreview(content);
+        const mentions = data.mentions || chatService.extractMentions(content);
+
+        const messagePayload: ChatMessage = {
           id: data.id || crypto.randomUUID(),
-          senderId: ws.data.participantId,
+          meetingId: ws.data.meetingId,
+          senderId: ws.data.participantId!,
           senderName: ws.data.displayName || "Participant",
-          content: data.content,
+          content,
           messageType: data.messageType || (data.attachment ? "FILE" : "TEXT"),
-          attachment: data.attachment, // { name, size, type, url }
+          attachment: data.attachment,
+          replyTo: data.replyTo,
+          mentions,
+          linkPreview,
+          reactions: {},
+          isPinned: false,
+          isDeleted: false,
           createdAt: new Date().toISOString(),
         };
-        broadcastToRoom(ws.data.meetingId!, {
+
+        await chatService.saveMessage(ws.data.meetingId, messagePayload);
+
+        broadcastToRoom(ws.data.meetingId, {
           event: "chat:message",
           data: messagePayload,
         }, ws);
+
         sendResponse(ws, id, { sent: true, message: messagePayload });
+        break;
+      }
+
+      case "chat:react": {
+        const { messageId, emoji } = data;
+        if (!ws.data.meetingId || !messageId || !emoji) {
+          sendError(ws, id, 400, "Missing messageId or emoji");
+          break;
+        }
+
+        const result = await chatService.addReaction(
+          ws.data.meetingId,
+          messageId,
+          ws.data.participantId!,
+          emoji
+        );
+
+        if (result) {
+          broadcastToRoom(ws.data.meetingId, {
+            event: "chat:reacted",
+            data: {
+              messageId,
+              emoji,
+              participantId: ws.data.participantId,
+              participantName: ws.data.displayName,
+              reactions: result.reactions,
+            },
+          });
+          sendResponse(ws, id, { success: true, ...result });
+        } else {
+          sendError(ws, id, 404, "Message not found");
+        }
+        break;
+      }
+
+      case "chat:delete": {
+        const { messageId } = data;
+        if (!ws.data.meetingId || !messageId) {
+          sendError(ws, id, 400, "Missing messageId");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        // Allow author or privileged users to delete
+        const deleted = await chatService.deleteMessage(ws.data.meetingId, messageId);
+        if (deleted) {
+          broadcastToRoom(ws.data.meetingId, {
+            event: "chat:messageDeleted",
+            data: { messageId, deletedBy: ws.data.displayName },
+          });
+          sendResponse(ws, id, { success: true, messageId });
+        } else {
+          sendError(ws, id, 404, "Message not found");
+        }
+        break;
+      }
+
+      case "chat:pin": {
+        const { messageId, isPinned } = data;
+        if (!ws.data.meetingId || !messageId) {
+          sendError(ws, id, 400, "Missing messageId");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can pin messages");
+          break;
+        }
+
+        const pinned = await chatService.pinMessage(ws.data.meetingId, messageId, Boolean(isPinned));
+        broadcastToRoom(ws.data.meetingId, {
+          event: "chat:messagePinned",
+          data: { messageId, isPinned: Boolean(isPinned), message: pinned },
+        });
+        sendResponse(ws, id, { success: true, isPinned: Boolean(isPinned), message: pinned });
+        break;
+      }
+
+      case "chat:muteUser": {
+        const { targetParticipantId, muted } = data;
+        if (!ws.data.meetingId || !targetParticipantId) {
+          sendError(ws, id, 400, "Missing targetParticipantId");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          sendError(ws, id, 403, "Only the host or co-host can moderate chat users");
+          break;
+        }
+
+        await chatService.muteUser(ws.data.meetingId, targetParticipantId, Boolean(muted));
+        broadcastToRoom(ws.data.meetingId, {
+          event: "chat:userMuted",
+          data: {
+            targetParticipantId,
+            muted: Boolean(muted),
+            by: ws.data.displayName || "Host",
+          },
+        });
+        sendResponse(ws, id, { success: true, targetParticipantId, muted: Boolean(muted) });
+        break;
+      }
+
+      case "chat:history": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+        const history = await chatService.getHistory(ws.data.meetingId);
+        sendResponse(ws, id, { messages: history });
+        break;
+      }
+
+      case "chat:export": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+        const transcript = await chatService.exportChat(ws.data.meetingId, data.format || "txt");
+        sendResponse(ws, id, { transcript, format: data.format || "txt" });
+        break;
+      }
+
+      case "recording:start": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          const all = await getRoomParticipants(ws.data.meetingId);
+          const hasHost = all.some((p: any) => p.role === "HOST" || p.role === "CO_HOST");
+          if (hasHost) {
+            sendError(ws, id, 403, "Only the host or co-host can start cloud recordings");
+            break;
+          }
+        }
+
+        const result = await recordingService.startRecording({
+          meetingId: ws.data.meetingId,
+          triggeredBy: ws.data.participantId!,
+          recordType: data.recordType || "COMBINED",
+        });
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "recording:started",
+          data: {
+            recordingId: result.recordingId,
+            startedAt: result.startedAt,
+            recordType: result.recordType,
+            by: ws.data.displayName || "Host",
+          },
+        });
+
+        sendResponse(ws, id, { success: true, ...result });
+        break;
+      }
+
+      case "recording:stop": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const isPrivileged = ws.data.role === "HOST" || ws.data.role === "CO_HOST";
+        if (!isPrivileged) {
+          const all = await getRoomParticipants(ws.data.meetingId);
+          const hasHost = all.some((p: any) => p.role === "HOST" || p.role === "CO_HOST");
+          if (hasHost) {
+            sendError(ws, id, 403, "Only the host or co-host can stop cloud recordings");
+            break;
+          }
+        }
+
+        const result = await recordingService.stopRecording(ws.data.meetingId);
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "recording:stopped",
+          data: {
+            recordingId: result?.recordingId,
+            mp4Url: result?.mp4Url,
+            hlsUrl: result?.hlsUrl,
+            durationSeconds: result?.durationSeconds,
+            fileSizeBytes: result?.fileSizeBytes,
+            by: ws.data.displayName || "Host",
+          },
+        });
+
+        sendResponse(ws, id, { success: true, ...result });
+        break;
+      }
+
+      case "recording:status": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+        const status = recordingService.getActiveRecording(ws.data.meetingId);
+        sendResponse(ws, id, { isRecording: Boolean(status), ...status });
         break;
       }
 
