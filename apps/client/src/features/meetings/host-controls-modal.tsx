@@ -26,6 +26,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onBroadcastSettings?: (settings: any) => void;
+  onEndMeetingForAll?: () => void;
 }
 
 export function HostControlsModal({
@@ -35,6 +36,7 @@ export function HostControlsModal({
   isOpen,
   onClose,
   onBroadcastSettings,
+  onEndMeetingForAll,
 }: Props) {
   const [locked, setLocked] = useState(initialLocked);
   const [settings, setSettings] = useState(initialSettings || {});
@@ -62,6 +64,7 @@ export function HostControlsModal({
   const handleEndMeeting = async () => {
     if (!confirm("Are you sure you want to end this meeting for all participants?")) return;
     setIsEnding(true);
+    onEndMeetingForAll?.();
     await endMeetingForAllAction(meetingId);
     window.location.href = "/meetings";
   };

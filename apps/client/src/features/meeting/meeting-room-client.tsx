@@ -12,7 +12,7 @@ import { WaitingRoomManager } from "../meetings/waiting-room-manager";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { useMediaStore } from "../../stores/media-store";
 import { useMediasoup } from "../../hooks/use-mediasoup";
-import { Disc, PhoneOff } from "lucide-react";
+import { Disc, PhoneOff, X } from "lucide-react";
 
 interface Message {
   id: string;
@@ -28,11 +28,36 @@ interface MeetingRoomClientProps {
   currentUser?: any;
 }
 
+function playMessageChime() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.09); // A5
+    gain.gain.setValueAtTime(0.06, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.22);
+  } catch {}
+}
+
 export function MeetingRoomClient({ slug, initialMeeting, currentUser }: MeetingRoomClientProps) {
   const router = useRouter();
   const [hasJoined, setHasJoined] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.name || "");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+  const [latestMessageToast, setLatestMessageToast] = useState<{
+    id: string;
+    senderName: string;
+    content: string;
+  } | null>(null);
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
   const [isHostControlsOpen, setIsHostControlsOpen] = useState(false);
   const [meetingSettings, setMeetingSettings] = useState<any>(initialMeeting?.settings || {});
@@ -40,6 +65,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
 
   const {
     isChatOpen,
+    toggleChat,
     isParticipantsListOpen,
     isHandRaised,
     setHandRaised,
@@ -48,6 +74,12 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     reset: resetMeeting,
   } = useMeetingStore();
   const { resetMedia } = useMediaStore();
+
+  const isMeetingHost = Boolean(
+    (currentUser?.id && initialMeeting?.hostId && currentUser.id === initialMeeting.hostId) ||
+    initialMeeting?.isHost ||
+    (!initialMeeting?.hostId && !currentUser?.id)
+  );
 
   const handleIncomingMessage = useCallback((msg: any) => {
     const newMsg: Message = {
@@ -61,7 +93,33 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       if (prev.some((m) => m.id === newMsg.id)) return prev;
       return [...prev, newMsg];
     });
+
+    if (!useMeetingStore.getState().isChatOpen) {
+      setUnreadMessagesCount((prev) => prev + 1);
+      setLatestMessageToast({
+        id: newMsg.id,
+        senderName: newMsg.senderName,
+        content: newMsg.content,
+      });
+      playMessageChime();
+    }
   }, []);
+
+  useEffect(() => {
+    if (isChatOpen) {
+      setUnreadMessagesCount(0);
+      setLatestMessageToast(null);
+    }
+  }, [isChatOpen]);
+
+  useEffect(() => {
+    if (latestMessageToast) {
+      const timer = setTimeout(() => {
+        setLatestMessageToast(null);
+      }, 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [latestMessageToast]);
 
   const handleIncomingReaction = useCallback((emoji: string) => {
     setActiveReaction(emoji);
@@ -84,13 +142,14 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
   } = useMediasoup(
     hasJoined ? slug : "",
     displayName,
-    undefined,
+    currentUser?.id,
     {
       onChatMessage: handleIncomingMessage,
       onReactionReceived: handleIncomingReaction,
       onSettingsUpdated: handleIncomingSettings,
       onMeetingEnded: handleIncomingMeetingEnded,
-    }
+    },
+    isMeetingHost ? "HOST" : "PARTICIPANT"
   );
 
   useEffect(() => {
@@ -99,13 +158,13 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         id: initialMeeting.id,
         slug: initialMeeting.slug,
         title: initialMeeting.title || "Meeting Room",
-        isHost: true, // Default to host permissions for meeting creator
+        isHost: isMeetingHost,
       });
       if (initialMeeting.settings) {
         setMeetingSettings(initialMeeting.settings);
       }
     }
-  }, [initialMeeting, setMeeting]);
+  }, [initialMeeting, isMeetingHost, setMeeting]);
 
   const handleJoin = (name: string) => {
     setDisplayName(name);
@@ -213,6 +272,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         isOpen={isHostControlsOpen}
         onClose={() => setIsHostControlsOpen(false)}
         onBroadcastSettings={handleBroadcastSettings}
+        onEndMeetingForAll={() => sendRequest("meeting:endForAll").catch(() => {})}
       />
 
       <div className="flex-1 flex w-full h-full overflow-hidden">
@@ -230,6 +290,41 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         )}
       </div>
 
+      {/* Floating In-Call Message Toast Notification (Google Meet Style) */}
+      {latestMessageToast && !isChatOpen && (
+        <div
+          onClick={() => {
+            toggleChat();
+            setLatestMessageToast(null);
+          }}
+          className="absolute bottom-24 left-6 z-40 max-w-sm bg-neutral-900/95 hover:bg-neutral-850 text-white border border-white/15 rounded-2xl p-3.5 shadow-2xl backdrop-blur-xl flex items-start gap-3 cursor-pointer transition-all duration-300 animate-in slide-in-from-bottom-4 hover:scale-[1.02]"
+        >
+          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-blue-500 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-md">
+            {(latestMessageToast.senderName || "P").charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0 pr-1">
+            <div className="flex items-center justify-between gap-2 mb-0.5">
+              <span className="text-xs font-semibold text-white/90 truncate">
+                {latestMessageToast.senderName}
+              </span>
+              <span className="text-[10px] text-indigo-400 font-medium shrink-0">Reply</span>
+            </div>
+            <p className="text-xs text-neutral-300 line-clamp-2 leading-relaxed">
+              {latestMessageToast.content}
+            </p>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setLatestMessageToast(null);
+            }}
+            className="p-1 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       <ControlBar
         onLeave={handleLeave}
         onSendReaction={handleSendReaction}
@@ -242,6 +337,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         disableReactions={!isHost && meetingSettings.disableReactions}
         disableChat={!isHost && meetingSettings.disableChat}
         isLocked={meetingSettings.lockMeeting}
+        unreadMessagesCount={unreadMessagesCount}
       />
     </div>
   );

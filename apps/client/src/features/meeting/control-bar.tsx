@@ -17,6 +17,7 @@ interface ControlBarProps {
   disableReactions?: boolean;
   disableChat?: boolean;
   isLocked?: boolean;
+  unreadMessagesCount?: number;
 }
 
 export function ControlBar({
@@ -31,6 +32,7 @@ export function ControlBar({
   disableReactions,
   disableChat,
   isLocked,
+  unreadMessagesCount = 0,
 }: ControlBarProps) {
 
   const {
@@ -40,6 +42,7 @@ export function ControlBar({
     toggleParticipantsList,
     participants,
     slug,
+    isHost,
   } = useMeetingStore();
 
   return (
@@ -80,13 +83,13 @@ export function ControlBar({
 
       {/* Right: Sidebars & Toggles */}
       <div className="flex items-center gap-2">
-        {onOpenHostControls && (
+        {Boolean(isHost && onOpenHostControls) && (
           <button
             onClick={onOpenHostControls}
             className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
             title="Host Controls"
           >
-            <ShieldAlert className="w-5 h-5" />
+            <ShieldAlert className="w-5 h-5 text-indigo-400" />
           </button>
         )}
 
@@ -111,6 +114,11 @@ export function ControlBar({
           title="Meeting chat"
         >
           <MessageSquare className="w-5 h-5" />
+          {unreadMessagesCount > 0 && !isChatOpen && (
+            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-lg animate-bounce">
+              {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+            </span>
+          )}
         </button>
       </div>
     </div>

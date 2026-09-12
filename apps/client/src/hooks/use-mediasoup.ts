@@ -28,6 +28,7 @@ export function useMediasoup(
   displayName: string,
   userId?: string,
   callbacks?: UseMediasoupCallbacks,
+  role: "HOST" | "CO_HOST" | "PARTICIPANT" = "PARTICIPANT",
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const myParticipantIdRef = useRef<string | null>(null);
@@ -357,6 +358,7 @@ export function useMediasoup(
           meetingId,
           displayName,
           userId,
+          role,
         });
 
         myParticipantIdRef.current = joinRes.participantId;
