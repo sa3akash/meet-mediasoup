@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import { Elysia } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { swagger } from "@elysiajs/swagger";

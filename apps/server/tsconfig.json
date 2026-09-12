@@ -5,6 +5,8 @@
     "moduleResolution": "bundler",
     "rootDir": "./",
     "baseUrl": ".",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "paths": {
       "@/*": ["./src/*"]
     },

@@ -24,12 +24,13 @@ RUN bun install --frozen-lockfile
 WORKDIR /app/apps/server
 
 # Bundle Elysia server into standalone JavaScript file
+# Build production bundle while preloading reflect-metadata
 RUN bun build \
     --target=bun \
     --minify \
-    --sourcemap=external \
+    --preload reflect-metadata \
     --outdir=./dist \
-    ./src/index.ts
+    src/index.ts
 
 # ==========================================
 # Stage 2: Production Runtime
