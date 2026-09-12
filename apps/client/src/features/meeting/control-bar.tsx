@@ -1,21 +1,10 @@
-import {
-  MessageSquare,
-  Users,
-  PhoneOff,
-  ShieldAlert,
-  Lock,
-  Shapes,
-  Radio,
-  Tv,
-  Pencil,
-  UploadCloud,
-  Bell,
-  Disc,
-} from "lucide-react";
+"use client";
+
+import { PhoneOff, Lock } from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { MediaButtons } from "./controls/media-buttons";
 import { ReactionsPicker } from "./controls/reactions-picker";
-import { LayoutSwitcher } from "./layout-switcher";
+import { ControlBarActions } from "./components/control-bar-actions";
 
 interface ControlBarProps {
   onLeave: () => void;
@@ -55,12 +44,11 @@ export function ControlBar({
   onToggleHandRaise,
   disableScreenShare,
   disableReactions,
-  disableChat,
+  disableChat: _disableChat,
   isLocked,
   unreadMessagesCount = 0,
   unreadNotificationsCount = 0,
 }: ControlBarProps) {
-
   const {
     isChatOpen,
     toggleChat,
@@ -76,7 +64,7 @@ export function ControlBar({
 
   return (
     <div className="relative w-full h-20 bg-neutral-900/90 backdrop-blur-xl border-t border-white/10 px-6 flex items-center justify-between z-20">
-      {/* Left: Meeting code / time */}
+      {/* Left: Meeting code / encryption badge */}
       <div className="hidden sm:flex items-center gap-3">
         <span className="text-white/80 font-medium text-sm tracking-wide">{slug || "meet-room"}</span>
         {isLocked && (
@@ -110,119 +98,26 @@ export function ControlBar({
         </button>
       </div>
 
-      {/* Right: Sidebars & Toggles */}
-      <div className="flex items-center gap-2">
-        <LayoutSwitcher />
-
-        {onOpenRecordingModal && (
-          <button
-            onClick={onOpenRecordingModal}
-            className={`p-3 rounded-xl transition-all relative flex items-center gap-1.5 ${
-              isRecording
-                ? "bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse"
-                : "text-white/70 hover:text-white hover:bg-white/10"
-            }`}
-            title={isRecording ? "Recording in progress" : "Record meeting"}
-          >
-            <Radio className="w-5 h-5" />
-            {isRecording && <span className="text-xs font-mono font-bold">REC</span>}
-          </button>
-        )}
-
-        {onOpenLiveStreamingModal && (
-          <button
-            onClick={onOpenLiveStreamingModal}
-            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors relative"
-            title="Live Streaming (YouTube, Facebook, RTMP)"
-          >
-            <Tv className="w-5 h-5" />
-          </button>
-        )}
-
-        {onOpenWhiteboardModal && (
-          <button
-            onClick={onOpenWhiteboardModal}
-            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-            title="Collaborative Whiteboard"
-          >
-            <Pencil className="w-5 h-5 text-amber-400" />
-          </button>
-        )}
-
-        {onOpenFileSharePanel && (
-          <button
-            onClick={onOpenFileSharePanel}
-            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-            title="Shared Files & Documents"
-          >
-            <UploadCloud className="w-5 h-5 text-blue-400" />
-          </button>
-        )}
-
-        {onOpenNotificationCenter && (
-          <button
-            onClick={onOpenNotificationCenter}
-            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors relative"
-            title="Notifications"
-          >
-            <Bell className="w-5 h-5 text-indigo-400" />
-            {unreadNotificationsCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-lg">
-                {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
-              </span>
-            )}
-          </button>
-        )}
-
-        {Boolean(isHost && onOpenHostControls) && (
-          <button
-            onClick={onOpenHostControls}
-            className="p-3 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-            title="Host Controls"
-          >
-            <ShieldAlert className="w-5 h-5 text-indigo-400" />
-          </button>
-        )}
-
-        <button
-          onClick={toggleParticipantsList}
-          className={`p-3 rounded-xl transition-colors relative ${
-            isParticipantsListOpen ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10"
-          }`}
-          title="Participants"
-        >
-          <Users className="w-5 h-5" />
-          <span className="absolute -top-1 -right-1 bg-indigo-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-            {participants.size + 1}
-          </span>
-        </button>
-
-        <button
-          onClick={toggleChat}
-          className={`p-3 rounded-xl transition-colors relative ${
-            isChatOpen ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10"
-          }`}
-          title="Meeting chat"
-        >
-          <MessageSquare className="w-5 h-5" />
-          {unreadMessagesCount > 0 && !isChatOpen && (
-            <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold shadow-lg animate-bounce">
-              {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={toggleActivities}
-          className={`p-3 rounded-xl transition-colors relative ${
-            isActivitiesOpen ? "bg-white/20 text-white" : "text-white/70 hover:bg-white/10"
-          }`}
-          title="Activities (Polls & Breakout Rooms)"
-        >
-          <Shapes className="w-5 h-5" />
-        </button>
-      </div>
+      {/* Right: Sidebars & Tool Toggles */}
+      <ControlBarActions
+        isHost={isHost}
+        isRecording={isRecording}
+        isChatOpen={isChatOpen}
+        isParticipantsListOpen={isParticipantsListOpen}
+        isActivitiesOpen={isActivitiesOpen}
+        participantsCount={participants.size + 1}
+        unreadMessagesCount={unreadMessagesCount}
+        unreadNotificationsCount={unreadNotificationsCount}
+        onOpenRecordingModal={onOpenRecordingModal}
+        onOpenLiveStreamingModal={onOpenLiveStreamingModal}
+        onOpenWhiteboardModal={onOpenWhiteboardModal}
+        onOpenFileSharePanel={onOpenFileSharePanel}
+        onOpenNotificationCenter={onOpenNotificationCenter}
+        onOpenHostControls={onOpenHostControls}
+        toggleParticipantsList={toggleParticipantsList}
+        toggleChat={toggleChat}
+        toggleActivities={toggleActivities}
+      />
     </div>
   );
 }
-

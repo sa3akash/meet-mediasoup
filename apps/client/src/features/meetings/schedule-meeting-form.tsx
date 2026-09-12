@@ -1,40 +1,12 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import {
-  Calendar,
-  Clock,
-  KeyRound,
-  Mail,
-  AlertCircle,
-  CheckCircle2,
-  Sparkles,
-  Zap,
-  Repeat,
-  Globe,
-  Download,
-  ExternalLink,
-  ArrowRight,
-} from "lucide-react";
+import { Calendar, AlertCircle, Zap, Repeat } from "lucide-react";
 import { createMeetingAction } from "../../actions/meeting.actions";
 import { MeetingSettingsChecklist } from "./meeting-settings-checklist";
-import Link from "next/link";
-
-const TIMEZONE_OPTIONS = [
-  { value: "UTC", label: "UTC (Coordinated Universal Time)" },
-  { value: "America/New_York", label: "Eastern Time (US & Canada)" },
-  { value: "America/Chicago", label: "Central Time (US & Canada)" },
-  { value: "America/Denver", label: "Mountain Time (US & Canada)" },
-  { value: "America/Los_Angeles", label: "Pacific Time (US & Canada)" },
-  { value: "Europe/London", label: "London (GMT / BST)" },
-  { value: "Europe/Paris", label: "Paris, Berlin, Amsterdam (CET)" },
-  { value: "Asia/Dubai", label: "Dubai, Abu Dhabi (GST)" },
-  { value: "Asia/Dhaka", label: "Dhaka (BST / UTC+6)" },
-  { value: "Asia/Kolkata", label: "India Standard Time (IST)" },
-  { value: "Asia/Singapore", label: "Singapore, Beijing (SGT)" },
-  { value: "Asia/Tokyo", label: "Tokyo, Seoul (JST)" },
-  { value: "Australia/Sydney", label: "Sydney, Melbourne (AEST)" },
-];
+import { MeetingSuccessBanner } from "./components/meeting-success-banner";
+import { MeetingSecurityToggles } from "./components/meeting-security-toggles";
+import { MeetingScheduleDetails } from "./components/meeting-schedule-details";
 
 export function ScheduleMeetingForm() {
   const [state, formAction, pending] = useActionState(createMeetingAction, null);
@@ -64,83 +36,8 @@ export function ScheduleMeetingForm() {
           <span>{state.error}</span>
         </div>
       )}
-      {state?.success && (
-        <div className="p-5 rounded-3xl bg-gradient-to-br from-emerald-500/10 via-neutral-900 to-indigo-500/10 border border-emerald-500/30 text-white space-y-4 shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-base">Meeting Scheduled Successfully!</h4>
-              <p className="text-xs text-neutral-400">
-                Code: <strong className="font-mono text-emerald-300">{state.slug}</strong>
-              </p>
-            </div>
-          </div>
 
-          {/* Sync & Action Options */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2">
-            <a
-              href={`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/google-url`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={async (e) => {
-                e.preventDefault();
-                try {
-                  const r = await fetch(`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/google-url`);
-                  const d = await r.json();
-                  if (d.url) window.open(d.url, "_blank");
-                } catch {
-                  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(state.meeting?.title || "Meeting")}`, "_blank");
-                }
-              }}
-              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:border-indigo-500/50"
-            >
-              <Calendar className="w-4 h-4 text-blue-400" />
-              <span>Google Calendar</span>
-              <ExternalLink className="w-3 h-3 text-neutral-500" />
-            </a>
-
-            <a
-              href={`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/outlook-url`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={async (e) => {
-                e.preventDefault();
-                try {
-                  const r = await fetch(`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/outlook-url`);
-                  const d = await r.json();
-                  if (d.liveUrl) window.open(d.liveUrl, "_blank");
-                } catch {
-                  window.open("https://outlook.live.com/calendar", "_blank");
-                }
-              }}
-              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:border-cyan-500/50"
-            >
-              <Calendar className="w-4 h-4 text-cyan-400" />
-              <span>Outlook Calendar</span>
-              <ExternalLink className="w-3 h-3 text-neutral-500" />
-            </a>
-
-            <a
-              href={`${API_URL}/api/calendar/${state.meeting?.id || state.slug}/ics`}
-              download={`${state.slug}.ics`}
-              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold flex items-center justify-center gap-2 transition-all hover:border-purple-500/50"
-            >
-              <Download className="w-4 h-4 text-purple-400" />
-              <span>Export .ICS File</span>
-            </a>
-
-            <Link
-              href={`/meeting/${state.slug}`}
-              className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/30"
-            >
-              <span>Join Room</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-        </div>
-      )}
+      {state?.success && <MeetingSuccessBanner state={state} apiUrl={API_URL} />}
 
       <input type="hidden" name="type" value={meetingType} />
       <input type="hidden" name="accessLevel" value={accessLevel} />
@@ -212,158 +109,20 @@ export function ScheduleMeetingForm() {
       </div>
 
       {/* Date & Time if Scheduled or Recurring */}
-      {meetingType !== "INSTANT" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Start Time</label>
-            <input
-              name="scheduledStartAt"
-              type="datetime-local"
-              required
-              className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">End Time</label>
-            <input
-              name="scheduledEndAt"
-              type="datetime-local"
-              required
-              className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-            />
-          </div>
+      <MeetingScheduleDetails
+        meetingType={meetingType}
+        timezone={timezone}
+        setTimezone={setTimezone}
+      />
 
-          {/* Timezone Selector */}
-          <div className="sm:col-span-2 flex flex-col gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Timezone</span>
-            </label>
-            <select
-              name="timezone"
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-            >
-              {TIMEZONE_OPTIONS.map((tz) => (
-                <option key={tz.value} value={tz.value}>
-                  {tz.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
-
-      {/* Recurrence Pattern */}
-      {meetingType === "RECURRING" && (
-        <div className="flex flex-col gap-2 p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20">
-          <label className="text-xs font-semibold uppercase tracking-wider text-indigo-300">Recurrence Cadence</label>
-          <select
-            name="recurrenceRule"
-            defaultValue="FREQ=WEEKLY"
-            className="w-full bg-neutral-900 border border-white/10 rounded-2xl px-4 py-2.5 text-white text-sm focus:outline-none"
-          >
-            <option value="FREQ=DAILY">Every Day (Daily)</option>
-            <option value="FREQ=WEEKLY">Every Week (Weekly)</option>
-            <option value="FREQ=MONTHLY">Every Month (Monthly)</option>
-          </select>
-        </div>
-      )}
-
-      {/* Access Level / Type Selection */}
-      <div className="flex flex-col gap-2">
-        <label className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Meeting Access Type</label>
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            onClick={() => setAccessLevel("PUBLIC")}
-            className={`p-3 rounded-2xl border text-left flex flex-col gap-1 transition-all ${
-              accessLevel === "PUBLIC"
-                ? "bg-indigo-500/10 border-indigo-500 text-indigo-300"
-                : "bg-neutral-900 border-white/5 text-neutral-400 hover:text-white"
-            }`}
-          >
-            <span className="font-semibold text-xs">Public</span>
-            <span className="text-[11px] text-neutral-500 leading-tight">Anyone with link</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAccessLevel("PRIVATE");
-              if (!passcode) generatePasscode();
-            }}
-            className={`p-3 rounded-2xl border text-left flex flex-col gap-1 transition-all ${
-              accessLevel === "PRIVATE"
-                ? "bg-indigo-500/10 border-indigo-500 text-indigo-300"
-                : "bg-neutral-900 border-white/5 text-neutral-400 hover:text-white"
-            }`}
-          >
-            <span className="font-semibold text-xs">Private</span>
-            <span className="text-[11px] text-neutral-500 leading-tight">PIN / Passcode required</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setAccessLevel("INVITE_ONLY")}
-            className={`p-3 rounded-2xl border text-left flex flex-col gap-1 transition-all ${
-              accessLevel === "INVITE_ONLY"
-                ? "bg-indigo-500/10 border-indigo-500 text-indigo-300"
-                : "bg-neutral-900 border-white/5 text-neutral-400 hover:text-white"
-            }`}
-          >
-            <span className="font-semibold text-xs">Invite Only</span>
-            <span className="text-[11px] text-neutral-500 leading-tight">Whitelisted attendees</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Passcode input for Private */}
-      {accessLevel === "PRIVATE" && (
-        <div className="p-4 rounded-2xl bg-neutral-900 border border-white/10 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
-              <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Meeting Passcode / PIN</span>
-            </label>
-            <button
-              type="button"
-              onClick={generatePasscode}
-              className="text-indigo-400 hover:text-indigo-300 text-xs font-medium"
-            >
-              Regenerate PIN
-            </button>
-          </div>
-          <input
-            name="passcode"
-            value={passcode}
-            onChange={(e) => setPasscode(e.target.value)}
-            required
-            placeholder="e.g. 849201"
-            className="w-full bg-neutral-950 border border-white/10 rounded-xl px-4 py-2 text-white font-mono text-base tracking-wider focus:outline-none focus:border-indigo-500"
-          />
-          <span className="text-[11px] text-neutral-500">Participants will need to provide this code in the lobby to enter.</span>
-        </div>
-      )}
-
-      {/* Invite emails for Invite Only */}
-      {accessLevel === "INVITE_ONLY" && (
-        <div className="p-4 rounded-2xl bg-neutral-900 border border-white/10 flex flex-col gap-2">
-          <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
-            <Mail className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Invited Emails</span>
-          </label>
-          <textarea
-            name="inviteEmails"
-            rows={2}
-            placeholder="colleague@company.com, client@partner.org (comma-separated)"
-            required
-            className="w-full bg-neutral-950 border border-white/10 rounded-xl px-4 py-2 text-white text-xs focus:outline-none focus:border-indigo-500 resize-none"
-          />
-          <span className="text-[11px] text-neutral-500">Only participants with these email addresses will be admitted.</span>
-        </div>
-      )}
+      {/* Security and Access Controls */}
+      <MeetingSecurityToggles
+        accessLevel={accessLevel}
+        setAccessLevel={setAccessLevel}
+        passcode={passcode}
+        setPasscode={setPasscode}
+        generatePasscode={generatePasscode}
+      />
 
       {/* Granular Meeting Settings */}
       <MeetingSettingsChecklist />

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { X, Users, Shuffle, Clock, ArrowRight, Boxes } from "lucide-react";
+import { X, Shuffle, ArrowRight, Boxes } from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import type { BreakoutRoomInfo } from "../../hooks/use-mediasoup";
+import { BreakoutRoomItem } from "./components/breakout-room-item";
+import { BreakoutConfigControls } from "./components/breakout-config-controls";
 
 interface BreakoutRoomsModalProps {
   isOpen: boolean;
@@ -24,15 +26,9 @@ export function BreakoutRoomsModal({
   const [duration, setDuration] = useState<number>(15);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // All remote participants + local host
-  const participantList = useMemo(() => {
-    return Array.from(participants.values());
-  }, [participants]);
-
-  // Generate initial rooms distribution
+  const participantList = useMemo(() => Array.from(participants.values()), [participants]);
   const [assignments, setAssignments] = useState<Record<string, number>>({});
 
-  // Auto-distribute participants evenly
   const autoAssign = useMemo(() => {
     const res: Record<string, number> = {};
     participantList.forEach((p, idx) => {
@@ -83,7 +79,6 @@ export function BreakoutRoomsModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="w-full max-w-lg bg-neutral-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header */}
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center">
@@ -104,52 +99,17 @@ export function BreakoutRoomsModal({
           </button>
         </div>
 
-        {/* Configuration Controls */}
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            {/* Room Count */}
-            <div>
-              <label className="text-xs font-semibold text-white/80 block mb-1.5">
-                Number of Rooms
-              </label>
-              <select
-                value={roomCount}
-                onChange={(e) => {
-                  setRoomCount(Number(e.target.value));
-                  setAssignments({});
-                }}
-                className="w-full bg-neutral-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                {[2, 3, 4, 5, 6, 8, 10].map((num) => (
-                  <option key={num} value={num}>
-                    {num} Rooms
-                  </option>
-                ))}
-              </select>
-            </div>
+          <BreakoutConfigControls
+            roomCount={roomCount}
+            duration={duration}
+            onChangeRoomCount={(c) => {
+              setRoomCount(c);
+              setAssignments({});
+            }}
+            onChangeDuration={setDuration}
+          />
 
-            {/* Duration */}
-            <div>
-              <label className="text-xs font-semibold text-white/80 block mb-1.5 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Duration</span>
-              </label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full bg-neutral-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value={5}>5 Minutes</option>
-                <option value={10}>10 Minutes</option>
-                <option value={15}>15 Minutes</option>
-                <option value={30}>30 Minutes</option>
-                <option value={45}>45 Minutes</option>
-                <option value={0}>Unlimited</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Assignment preview header */}
           <div className="flex items-center justify-between pt-2">
             <span className="text-xs font-semibold text-white/80">Room Assignments Preview</span>
             <button
@@ -161,7 +121,6 @@ export function BreakoutRoomsModal({
             </button>
           </div>
 
-          {/* Rooms Grid */}
           <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
             {Array.from({ length: roomCount }).map((_, rIdx) => {
               const assigned = participantList.filter(
@@ -169,43 +128,16 @@ export function BreakoutRoomsModal({
               );
 
               return (
-                <div
+                <BreakoutRoomItem
                   key={rIdx}
-                  className="p-3 rounded-2xl bg-neutral-800/50 border border-white/5 space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white">
-                      Breakout Room {rIdx + 1}
-                    </span>
-                    <span className="text-[11px] text-white/50 flex items-center gap-1">
-                      <Users className="w-3 h-3" />
-                      {assigned.length} people
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {assigned.length > 0 ? (
-                      assigned.map((p) => (
-                        <span
-                          key={p.id}
-                          className="px-2 py-0.5 rounded-lg bg-neutral-900 text-white/80 text-[11px] border border-white/5"
-                        >
-                          {p.displayName || "Participant"}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-[11px] text-white/30 italic">
-                        No participants assigned yet
-                      </span>
-                    )}
-                  </div>
-                </div>
+                  roomIndex={rIdx}
+                  assignedParticipants={assigned}
+                />
               );
             })}
           </div>
         </div>
 
-        {/* Footer actions */}
         <div className="p-5 border-t border-white/10 bg-neutral-900/50 flex items-center justify-end gap-3">
           <button
             type="button"
