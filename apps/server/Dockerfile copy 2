@@ -1,0 +1,50 @@
+# Production Dockerfile for Enterprise Meet Server (Bun + Native Mediasoup)
+FROM oven/bun:1-debian AS builder
+
+WORKDIR /app
+
+# Install native dependencies required for Mediasoup C++ worker compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    make \
+    g++ \
+    clang \
+    pkg-config \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy monorepo configurations and workspace files
+COPY package.json turbo.json bun.lock* ./
+COPY packages ./packages
+COPY apps/server ./apps/server
+
+# Install dependencies (compiling Mediasoup native workers for Linux)
+RUN bun install
+
+WORKDIR /app/apps/server
+
+# Build production bundle
+RUN bun build \
+	--compile \
+	--minify-whitespace \
+	--minify-syntax \
+	--outfile server \
+	src/index.ts
+
+# Production Runtime Stage
+FROM gcr.io/distroless/base
+
+WORKDIR /app
+
+COPY --from=builder /app/server server
+
+ENV NODE_ENV=production
+
+# Health check probe for container runtime
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+  CMD curl -f http://localhost:4000/health/live || exit 1
+
+CMD ["./server"]
+
+EXPOSE 4000
