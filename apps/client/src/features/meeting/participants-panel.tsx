@@ -1,15 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { X, Search, Mic, MicOff, Video, VideoOff, Hand, Pin, ShieldCheck } from "lucide-react";
+import { X, Search, Mic, MicOff, Video, VideoOff, Hand, Pin, ShieldCheck, UserX } from "lucide-react";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { useMediaStore } from "../../stores/media-store";
 
 interface ParticipantsPanelProps {
   localDisplayName: string;
+  onKickParticipant?: (participantId: string) => void;
+  onControlParticipantMedia?: (participantId: string, mediaType: "audio" | "video", muted: boolean) => void;
+  onMuteAll?: () => void;
 }
 
-export function ParticipantsPanel({ localDisplayName }: ParticipantsPanelProps) {
+export function ParticipantsPanel({
+  localDisplayName,
+  onKickParticipant,
+  onControlParticipantMedia,
+  onMuteAll,
+}: ParticipantsPanelProps) {
   const [search, setSearch] = useState("");
   const {
     participants,
@@ -39,13 +47,29 @@ export function ParticipantsPanel({ localDisplayName }: ParticipantsPanelProps) 
             {totalCount}
           </span>
         </div>
-        <button
-          onClick={toggleParticipantsList}
-          className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-          title="Close panel"
-        >
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {Boolean(isHost && onMuteAll && participantList.length > 0) && (
+            <button
+              onClick={() => {
+                if (confirm("Mute all participants?")) {
+                  onMuteAll?.();
+                }
+              }}
+              className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-red-500/20"
+              title="Mute all participants"
+            >
+              <MicOff className="w-3.5 h-3.5" />
+              <span>Mute all</span>
+            </button>
+          )}
+          <button
+            onClick={toggleParticipantsList}
+            className="p-1.5 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            title="Close panel"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Search bar */}
@@ -140,6 +164,19 @@ export function ParticipantsPanel({ localDisplayName }: ParticipantsPanelProps) 
 
               {/* Actions & Media Status */}
               <div className="flex items-center gap-1 text-white/60">
+                {Boolean(isHost && onKickParticipant) && (
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remove ${p.displayName || "Participant"} from this meeting?`)) {
+                        onKickParticipant?.(p.id);
+                      }
+                    }}
+                    className="p-1.5 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    title={`Remove ${p.displayName || "Participant"}`}
+                  >
+                    <UserX className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   onClick={() => setPinnedParticipant(isPinned ? null : p.id)}
                   className={`p-1.5 rounded-lg transition-colors ${
@@ -149,12 +186,55 @@ export function ParticipantsPanel({ localDisplayName }: ParticipantsPanelProps) 
                 >
                   <Pin className="w-4 h-4" />
                 </button>
-                <div className={`p-1.5 rounded-lg ${p.isAudioMuted ? "text-red-400 bg-red-500/10" : "text-white/70"}`}>
-                  {p.isAudioMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </div>
-                <div className={`p-1.5 rounded-lg ${p.isVideoMuted ? "text-red-400 bg-red-500/10" : "text-white/70"}`}>
-                  {p.isVideoMuted ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-                </div>
+                {/* Audio Control / Status */}
+                {Boolean(isHost && onControlParticipantMedia) ? (
+                  <button
+                    onClick={() => {
+                      if (!p.isAudioMuted) {
+                        onControlParticipantMedia?.(p.id, "audio", true);
+                      } else {
+                        onControlParticipantMedia?.(p.id, "audio", false);
+                      }
+                    }}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      p.isAudioMuted
+                        ? "text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                    title={p.isAudioMuted ? "Ask to unmute microphone" : "Mute participant"}
+                  >
+                    {p.isAudioMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+                ) : (
+                  <div className={`p-1.5 rounded-lg ${p.isAudioMuted ? "text-red-400 bg-red-500/10" : "text-white/70"}`}>
+                    {p.isAudioMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </div>
+                )}
+
+                {/* Video Control / Status */}
+                {Boolean(isHost && onControlParticipantMedia) ? (
+                  <button
+                    onClick={() => {
+                      if (!p.isVideoMuted) {
+                        onControlParticipantMedia?.(p.id, "video", true);
+                      } else {
+                        onControlParticipantMedia?.(p.id, "video", false);
+                      }
+                    }}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      p.isVideoMuted
+                        ? "text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    }`}
+                    title={p.isVideoMuted ? "Ask to turn on camera" : "Turn off participant camera"}
+                  >
+                    {p.isVideoMuted ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                  </button>
+                ) : (
+                  <div className={`p-1.5 rounded-lg ${p.isVideoMuted ? "text-red-400 bg-red-500/10" : "text-white/70"}`}>
+                    {p.isVideoMuted ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -162,7 +242,7 @@ export function ParticipantsPanel({ localDisplayName }: ParticipantsPanelProps) 
 
         {filteredParticipants.length === 0 && search && (
           <div className="py-8 text-center text-xs text-white/40">
-            No participants match "{search}"
+            No participants match &quot;{search}&quot;
           </div>
         )}
       </div>

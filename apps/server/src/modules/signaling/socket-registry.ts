@@ -5,6 +5,7 @@ export interface SocketData {
   participantId?: string;
   userId?: string;
   displayName?: string;
+  role?: string;
 }
 
 // Map of meetingId -> Set of active WebSockets

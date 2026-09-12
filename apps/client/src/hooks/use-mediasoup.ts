@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/refs */
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
@@ -16,11 +18,20 @@ const RTC_CONFIG: RTCConfiguration = {
   iceCandidatePoolSize: 10,
 };
 
-export interface UseMediasoupCallbacks {
+export interface MediaForcedEvent {
+  mediaType: "audio" | "video";
+  muted: boolean;
+  by?: string;
+  reason?: string;
+}
+
+interface UseMediasoupCallbacks {
   onChatMessage?: (msg: any) => void;
   onReactionReceived?: (emoji: string) => void;
   onMeetingEnded?: () => void;
   onSettingsUpdated?: (settings: any) => void;
+  onKicked?: (reason: string) => void;
+  onMediaForced?: (event: MediaForcedEvent) => void;
 }
 
 export function useMediasoup(
@@ -46,6 +57,10 @@ export function useMediasoup(
   onMeetingEndedRef.current = callbacks?.onMeetingEnded;
   const onSettingsUpdatedRef = useRef(callbacks?.onSettingsUpdated);
   onSettingsUpdatedRef.current = callbacks?.onSettingsUpdated;
+  const onKickedRef = useRef(callbacks?.onKicked);
+  onKickedRef.current = callbacks?.onKicked;
+  const onMediaForcedRef = useRef(callbacks?.onMediaForced);
+  onMediaForcedRef.current = callbacks?.onMediaForced;
 
   const { localStream, removeRemoteStream, setRemoteStream } = useMediaStore();
   const localStreamRef = useRef<MediaStream | null>(localStream);
@@ -425,6 +440,40 @@ export function useMediasoup(
           break;
         }
 
+        case "participant:kicked": {
+          if (onKickedRef.current) {
+            onKickedRef.current(msg.data?.reason || "You were removed from the meeting by the host.");
+          }
+          break;
+        }
+
+        case "participant:forceMediaState": {
+          const { mediaType, muted, by, reason } = msg.data || {};
+          if (muted) {
+            if (mediaType === "audio") {
+              const { localStream: currentStream, setAudioMuted } = useMediaStore.getState();
+              if (currentStream) {
+                const audioTrack = currentStream.getAudioTracks()[0];
+                if (audioTrack) audioTrack.enabled = false;
+              }
+              setAudioMuted(true);
+              sendRequest("participant:updateMediaState", { isAudioMuted: true }).catch(() => {});
+            } else if (mediaType === "video") {
+              const { localStream: currentStream, setVideoMuted } = useMediaStore.getState();
+              if (currentStream) {
+                const videoTrack = currentStream.getVideoTracks()[0];
+                if (videoTrack) videoTrack.enabled = false;
+              }
+              setVideoMuted(true);
+              sendRequest("participant:updateMediaState", { isVideoMuted: true }).catch(() => {});
+            }
+          }
+          if (onMediaForcedRef.current) {
+            onMediaForcedRef.current({ mediaType, muted, by, reason });
+          }
+          break;
+        }
+
         case "participant:joined": {
           const pid = msg.data.id || msg.data.participantId;
           if (pid && pid !== myParticipantIdRef.current) {
@@ -614,6 +663,24 @@ export function useMediasoup(
     initiatePeerConnection,
   ]);
 
+  const kickParticipant = useCallback(
+    async (targetParticipantId: string) => {
+      return sendRequest("participant:kick", { targetParticipantId });
+    },
+    [sendRequest]
+  );
+
+  const controlParticipantMedia = useCallback(
+    async (targetParticipantId: string, mediaType: "audio" | "video", muted: boolean) => {
+      return sendRequest("participant:controlMedia", { targetParticipantId, mediaType, muted });
+    },
+    [sendRequest]
+  );
+
+  const muteAllParticipants = useCallback(async () => {
+    return sendRequest("participant:muteAll", {});
+  }, [sendRequest]);
+
   return {
     sendRequest,
     toggleAudio,
@@ -621,5 +688,8 @@ export function useMediasoup(
     toggleScreenShare,
     startScreenShare,
     stopScreenShare,
+    kickParticipant,
+    controlParticipantMedia,
+    muteAllParticipants,
   };
 }

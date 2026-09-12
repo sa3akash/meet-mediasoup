@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -11,15 +13,23 @@ import { HostControlsModal } from "../meetings/host-controls-modal";
 import { WaitingRoomManager } from "../meetings/waiting-room-manager";
 import { useMeetingStore } from "../../stores/meeting-store";
 import { useMediaStore } from "../../stores/media-store";
-import { useMediasoup } from "../../hooks/use-mediasoup";
-import { Disc, PhoneOff, X } from "lucide-react";
+import { useMediasoup, type MediaForcedEvent } from "../../hooks/use-mediasoup";
+import { Disc, PhoneOff, X, UserX, Mic, MicOff, Video, VideoOff } from "lucide-react";
 
-interface Message {
+export interface MessageAttachment {
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+}
+
+export interface Message {
   id: string;
   senderName: string;
   content: string;
   createdAt: string;
   isSelf?: boolean;
+  attachment?: MessageAttachment;
 }
 
 interface MeetingRoomClientProps {
@@ -62,6 +72,9 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
   const [isHostControlsOpen, setIsHostControlsOpen] = useState(false);
   const [meetingSettings, setMeetingSettings] = useState<any>(initialMeeting?.settings || {});
   const [meetingEndedModal, setMeetingEndedModal] = useState(false);
+  const [kickedReason, setKickedReason] = useState<string | null>(null);
+  const [mediaPrompt, setMediaPrompt] = useState<MediaForcedEvent | null>(null);
+  const [mediaNotification, setMediaNotification] = useState<string | null>(null);
 
   const {
     isChatOpen,
@@ -85,9 +98,10 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     const newMsg: Message = {
       id: msg.id || crypto.randomUUID(),
       senderName: msg.senderName || "Participant",
-      content: msg.content,
+      content: msg.content || (msg.attachment ? `Shared a file: ${msg.attachment.name}` : ""),
       createdAt: msg.createdAt || new Date().toISOString(),
       isSelf: false,
+      attachment: msg.attachment,
     };
     setMessages((prev) => {
       if (prev.some((m) => m.id === newMsg.id)) return prev;
@@ -99,7 +113,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       setLatestMessageToast({
         id: newMsg.id,
         senderName: newMsg.senderName,
-        content: newMsg.content,
+        content: newMsg.content || (newMsg.attachment ? `Shared a file: ${newMsg.attachment.name}` : ""),
       });
       playMessageChime();
     }
@@ -134,11 +148,32 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     setMeetingEndedModal(true);
   }, []);
 
+  const handleKicked = useCallback((reason: string) => {
+    setKickedReason(reason || "You have been removed from the meeting by the host.");
+  }, []);
+
+  const handleMediaForced = useCallback((event: MediaForcedEvent) => {
+    if (event.muted) {
+      setMediaNotification(
+        event.reason ||
+          (event.mediaType === "audio"
+            ? "The host has muted your microphone."
+            : "The host has turned off your camera.")
+      );
+      setTimeout(() => setMediaNotification(null), 5000);
+    } else {
+      setMediaPrompt(event);
+    }
+  }, []);
+
   const {
     sendRequest,
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
+    kickParticipant,
+    controlParticipantMedia,
+    muteAllParticipants,
   } = useMediasoup(
     hasJoined ? slug : "",
     displayName,
@@ -148,6 +183,8 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       onReactionReceived: handleIncomingReaction,
       onSettingsUpdated: handleIncomingSettings,
       onMeetingEnded: handleIncomingMeetingEnded,
+      onKicked: handleKicked,
+      onMediaForced: handleMediaForced,
     },
     isMeetingHost ? "HOST" : "PARTICIPANT"
   );
@@ -177,7 +214,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     router.push("/meetings");
   };
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, attachment?: MessageAttachment) => {
     const msgId = crypto.randomUUID();
     const newMsg: Message = {
       id: msgId,
@@ -185,11 +222,12 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       content,
       createdAt: new Date().toISOString(),
       isSelf: true,
+      attachment,
     };
     setMessages((prev) => [...prev, newMsg]);
 
     try {
-      await sendRequest("chat:send", { content, id: msgId });
+      await sendRequest("chat:send", { content, id: msgId, attachment });
     } catch (err) {
       console.warn("[Chat] Failed to send message:", err);
     }
@@ -253,10 +291,79 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
             <p className="text-neutral-400 text-xs">The host has ended this meeting for all participants.</p>
             <button
               onClick={() => router.push("/meetings")}
-              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 text-white font-semibold text-xs"
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-colors text-white font-semibold text-xs"
             >
               Return to Dashboard
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Kicked / Removed from Meeting Modal */}
+      {kickedReason && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="bg-neutral-900 border border-white/10 rounded-3xl p-6 max-w-sm w-full text-center flex flex-col items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
+              <UserX className="w-6 h-6" />
+            </div>
+            <h3 className="text-white font-bold text-lg">Removed from Meeting</h3>
+            <p className="text-neutral-400 text-xs">
+              {kickedReason || "You have been removed from the meeting by the host."}
+            </p>
+            <button
+              onClick={() => router.push("/meetings")}
+              className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 transition-colors text-white font-semibold text-xs"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification when Host Mutes Participant */}
+      {mediaNotification && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-neutral-900/95 text-white border border-red-500/30 rounded-2xl px-5 py-3 shadow-2xl backdrop-blur-xl flex items-center gap-3 animate-in slide-in-from-top-4">
+          <div className="w-8 h-8 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+            <MicOff className="w-4 h-4" />
+          </div>
+          <span className="text-xs font-semibold text-neutral-200">{mediaNotification}</span>
+        </div>
+      )}
+
+      {/* Media Request Prompt (When Host asks participant to unmute or turn on camera) */}
+      {mediaPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-neutral-900 border border-white/15 rounded-3xl p-6 max-w-sm w-full text-center flex flex-col items-center gap-4 shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+              {mediaPrompt.mediaType === "audio" ? <Mic className="w-6 h-6" /> : <Video className="w-6 h-6" />}
+            </div>
+            <h3 className="text-white font-bold text-base">
+              {mediaPrompt.mediaType === "audio" ? "Unmute your microphone?" : "Turn on your camera?"}
+            </h3>
+            <p className="text-neutral-300 text-xs leading-relaxed">
+              {mediaPrompt.reason || "The host is asking you to share your audio/video in the meeting."}
+            </p>
+            <div className="flex items-center gap-2 w-full pt-2">
+              <button
+                onClick={() => setMediaPrompt(null)}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold transition-colors"
+              >
+                {mediaPrompt.mediaType === "audio" ? "Stay Muted" : "Keep Off"}
+              </button>
+              <button
+                onClick={() => {
+                  if (mediaPrompt.mediaType === "audio") {
+                    toggleAudio();
+                  } else {
+                    toggleVideo();
+                  }
+                  setMediaPrompt(null);
+                }}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors shadow-lg shadow-indigo-600/30"
+              >
+                {mediaPrompt.mediaType === "audio" ? "Unmute" : "Turn On"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -286,7 +393,12 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
           />
         )}
         {isParticipantsListOpen && (
-          <ParticipantsPanel localDisplayName={displayName} />
+          <ParticipantsPanel
+            localDisplayName={displayName}
+            onKickParticipant={kickParticipant}
+            onControlParticipantMedia={controlParticipantMedia}
+            onMuteAll={muteAllParticipants}
+          />
         )}
       </div>
 

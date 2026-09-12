@@ -72,6 +72,7 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         ws.data.participantId = ws.data.participantId || crypto.randomUUID();
         ws.data.userId = userId;
         ws.data.displayName = displayName;
+        ws.data.role = role;
 
         registerSocket(meetingId, ws);
 
@@ -183,7 +184,8 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
           senderId: ws.data.participantId,
           senderName: ws.data.displayName || "Participant",
           content: data.content,
-          messageType: data.messageType || "TEXT",
+          messageType: data.messageType || (data.attachment ? "FILE" : "TEXT"),
+          attachment: data.attachment, // { name, size, type, url }
           createdAt: new Date().toISOString(),
         };
         broadcastToRoom(ws.data.meetingId!, {
@@ -191,6 +193,152 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
           data: messagePayload,
         }, ws);
         sendResponse(ws, id, { sent: true, message: messagePayload });
+        break;
+      }
+
+      case "participant:kick": {
+        const { targetParticipantId } = data;
+        if (!ws.data.meetingId || !targetParticipantId) {
+          sendError(ws, id, 400, "Invalid kick parameters");
+          break;
+        }
+
+        const allParticipants = await getRoomParticipants(ws.data.meetingId);
+        const caller = allParticipants.find((p: any) => (p.id || p.participantId) === ws.data.participantId);
+        const isCallerHost = ws.data.role === "HOST" || caller?.role === "HOST";
+
+        if (!isCallerHost) {
+          sendError(ws, id, 403, "Only the meeting host can remove participants");
+          break;
+        }
+
+        const sockets = roomSockets.get(ws.data.meetingId);
+        if (sockets) {
+          for (const targetWs of sockets) {
+            if (targetWs.data.participantId === targetParticipantId) {
+              targetWs.send(JSON.stringify({
+                event: "participant:kicked",
+                data: {
+                  reason: "You were removed from the meeting by the host.",
+                  participantId: targetParticipantId,
+                },
+              }));
+              handleSocketClose(targetWs);
+              targetWs.close();
+              break;
+            }
+          }
+        }
+
+        broadcastToRoom(ws.data.meetingId, {
+          event: "participant:left",
+          data: { participantId: targetParticipantId },
+        });
+
+        sendResponse(ws, id, { kicked: true, targetParticipantId });
+        break;
+      }
+
+      case "participant:controlMedia": {
+        const { targetParticipantId, mediaType, muted } = data;
+        if (!ws.data.meetingId || !targetParticipantId || !mediaType) {
+          sendError(ws, id, 400, "Missing required parameters for controlMedia");
+          break;
+        }
+
+        const allParticipants = await getRoomParticipants(ws.data.meetingId);
+        const caller = allParticipants.find((p: any) => (p.id || p.participantId) === ws.data.participantId);
+        const isCallerHost = ws.data.role === "HOST" || caller?.role === "HOST";
+
+        if (!isCallerHost) {
+          sendError(ws, id, 403, "Only the meeting host can control participant media");
+          break;
+        }
+
+        const sockets = roomSockets.get(ws.data.meetingId);
+        if (sockets) {
+          for (const targetWs of sockets) {
+            if (targetWs.data.participantId === targetParticipantId && targetWs.readyState === 1) {
+              targetWs.send(JSON.stringify({
+                event: "participant:forceMediaState",
+                data: {
+                  mediaType,
+                  muted: Boolean(muted),
+                  by: ws.data.displayName || "Host",
+                  reason: muted
+                    ? (mediaType === "audio" ? "The host has muted your microphone." : "The host has turned off your camera.")
+                    : (mediaType === "audio" ? "The host is asking you to unmute your microphone." : "The host is asking you to turn on your camera."),
+                },
+              }));
+              break;
+            }
+          }
+        }
+
+        if (muted) {
+          const targetRecord = allParticipants.find((p: any) => (p.id || p.participantId) === targetParticipantId);
+          if (targetRecord) {
+            const updated = {
+              ...targetRecord,
+              ...(mediaType === "audio" ? { isAudioMuted: true } : { isVideoMuted: true }),
+            };
+            await addRoomParticipant(ws.data.meetingId, targetParticipantId, updated);
+            broadcastToRoom(ws.data.meetingId, {
+              event: "participant:mediaStateChanged",
+              data: updated,
+            });
+          }
+        }
+
+        sendResponse(ws, id, { success: true, targetParticipantId, mediaType, muted });
+        break;
+      }
+
+      case "participant:muteAll": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const allParticipants = await getRoomParticipants(ws.data.meetingId);
+        const caller = allParticipants.find((p: any) => (p.id || p.participantId) === ws.data.participantId);
+        const isCallerHost = ws.data.role === "HOST" || caller?.role === "HOST";
+
+        if (!isCallerHost) {
+          sendError(ws, id, 403, "Only the meeting host can mute all participants");
+          break;
+        }
+
+        const sockets = roomSockets.get(ws.data.meetingId);
+        if (sockets) {
+          for (const s of sockets) {
+            if (s.data.participantId !== ws.data.participantId && s.readyState === 1) {
+              s.send(JSON.stringify({
+                event: "participant:forceMediaState",
+                data: {
+                  mediaType: "audio",
+                  muted: true,
+                  by: ws.data.displayName || "Host",
+                  reason: "The host has muted all participants.",
+                },
+              }));
+            }
+          }
+        }
+
+        for (const p of allParticipants) {
+          const pid = p.id || p.participantId;
+          if (pid !== ws.data.participantId) {
+            const updated = { ...p, isAudioMuted: true };
+            await addRoomParticipant(ws.data.meetingId, pid, updated);
+            broadcastToRoom(ws.data.meetingId, {
+              event: "participant:mediaStateChanged",
+              data: updated,
+            });
+          }
+        }
+
+        sendResponse(ws, id, { success: true, mutedAll: true });
         break;
       }
 
