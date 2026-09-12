@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package definitions and lockfile first (optimizes layer caching)
+# Copy package definitions and lockfile first
 COPY package.json bun.lock* turbo.json ./
 COPY packages ./packages
 COPY apps/server ./apps/server
@@ -23,14 +23,12 @@ RUN bun install --frozen-lockfile
 
 WORKDIR /app/apps/server
 
-# Bundle Elysia server into standalone JavaScript file
-# Build production bundle while preloading reflect-metadata
+# Build production bundle into apps/server/dist/index.js
 RUN bun build \
     --target=bun \
     --minify \
-    --preload reflect-metadata \
     --outdir=./dist \
-    src/index.ts
+    ./src/index.ts
 
 # ==========================================
 # Stage 2: Production Runtime
@@ -39,7 +37,7 @@ FROM oven/bun:1-slim AS runner
 
 WORKDIR /app
 
-# Copy built bundle and node_modules (with Mediasoup native binaries)
+# Copy built bundle directory directly to /app/dist
 COPY --from=builder /app/apps/server/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/server/node_modules ./apps/server/node_modules
@@ -52,5 +50,5 @@ EXPOSE 4000
 EXPOSE 10000-10100/udp
 EXPOSE 10000-10100/tcp
 
-# Run directly using the entrypoint bundle from /app
-CMD ["bun", "run", "dist/index.js"]
+# Run index.js while preloading reflect-metadata at runtime
+CMD ["bun", "run", "--preload", "reflect-metadata", "apps/server/dist/index.js"]
