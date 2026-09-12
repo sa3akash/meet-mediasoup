@@ -68,8 +68,5 @@ USER bun
 # Expose port 3000 to allow HTTP traffic
 EXPOSE 3000
 
-HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
-  CMD curl -f http://localhost:3000/ || exit 1
-
 # Start Next.js standalone server with Bun
 CMD ["bun", "server.js"]
