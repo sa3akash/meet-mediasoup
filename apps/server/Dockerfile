@@ -1,11 +1,11 @@
 # ==========================================
-# Stage 1: Build & Compile Native Workers
+# Stage 1: Build Native Workers & Bundle
 # ==========================================
 FROM oven/bun:1 AS builder
 
 WORKDIR /app
 
-# Install native build toolchain required by Mediasoup
+# Install native C++ build tools required by Mediasoup
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
@@ -13,17 +13,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package definitions and lockfile first
+# Copy root monorepo manifest files
 COPY package.json bun.lock* turbo.json ./
+
+# Copy all workspace packages and apps
 COPY packages ./packages
 COPY apps/server ./apps/server
 
-# Install dependencies and build Mediasoup C++ binaries
+# Install all workspace dependencies & compile Mediasoup native binaries
 RUN bun install --frozen-lockfile
 
+# Move into the server app workspace
 WORKDIR /app/apps/server
 
-# Build production bundle into apps/server/dist/index.js
+# Bundle server into a single file with external package resolution
 RUN bun build \
     --target=bun \
     --minify \
@@ -31,24 +34,32 @@ RUN bun build \
     ./src/index.ts
 
 # ==========================================
-# Stage 2: Production Runtime
+# Stage 2: Minimal Production Runtime
 # ==========================================
 FROM oven/bun:1-slim AS runner
 
 WORKDIR /app
 
-# Copy built bundle directory directly to /app/dist
-COPY --from=builder /app/apps/server/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/server/node_modules ./apps/server/node_modules
+# 1. Copy root package manifest
+COPY package.json ./
+
+# 2. Copy compiled application output from builder stage
+COPY --from=builder /app/apps/server/dist ./apps/server/dist
 COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
 
+# 3. Copy root and workspace node_modules (preserves Mediasoup binaries & workspace symlinks)
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/apps/server/node_modules ./apps/server/node_modules
+
+# Environment settings
 ENV NODE_ENV=production
+# Force Mediasoup to find its worker C++ executable in root node_modules
 ENV MEDIASOUP_WORKER_BIN=/app/node_modules/mediasoup/worker/out/Release/mediasoup-worker
 
 EXPOSE 4000
 EXPOSE 10000-10100/udp
 EXPOSE 10000-10100/tcp
 
-# Run index.js while preloading reflect-metadata at runtime
+# Execute from app root with reflect-metadata preloaded
 CMD ["bun", "run", "--preload", "reflect-metadata", "apps/server/dist/index.js"]
