@@ -22,12 +22,12 @@ RUN bun install --frozen-lockfile
 
 WORKDIR /app/apps/server
 
-# Build production bundle using correct Bun output flags
+# Build production bundle using --outdir flag
 RUN bun build \
     --minify-whitespace \
     --minify-syntax \
     --target=bun \
-    --outfile=./dist/index.js \
+    --outdir=./dist \
     src/index.ts
 
 # ==========================================
@@ -50,4 +50,4 @@ EXPOSE 4000
 EXPOSE 10000-10100/udp
 EXPOSE 10000-10100/tcp
 
-CMD ["bun", "run", "./dist/index.js"]
+CMD ["bun", "run", "dist/index.js"]
