@@ -62,4 +62,4 @@ EXPOSE 10000-10100/udp
 EXPOSE 10000-10100/tcp
 
 # Execute from app root with reflect-metadata preloaded
-CMD ["bun", "run", "--preload", "reflect-metadata", "apps/server/dist/index.js"]
+CMD ["bun", "run", "apps/server/dist/index.js"]
