@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-const API_BASE = process.env.API_URL || "http://localhost:4000";
+const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 export async function loginAction(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
@@ -17,9 +17,15 @@ export async function loginAction(prevState: any, formData: FormData) {
       body: JSON.stringify({ email, password, rememberMe }),
     });
 
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      data = { error: (await res.text()) || "Login failed" };
+    }
+
     if (!res.ok) {
-      return { error: data.error || "Login failed" };
+      return { error: data.error || data.message || "Login failed" };
     }
 
     // Set secure HTTP-only cookies
@@ -37,8 +43,9 @@ export async function loginAction(prevState: any, formData: FormData) {
       path: "/",
       maxAge: rememberMe ? 30 * 24 * 3600 : 24 * 3600,
     });
-  } catch {
-    return { error: "Network error occurred" };
+  } catch (err: any) {
+    console.error("[AuthAction] Login error:", err);
+    return { error: err?.message || "Network error occurred" };
   }
 
   redirect("/");
@@ -56,12 +63,19 @@ export async function signupAction(prevState: any, formData: FormData) {
       body: JSON.stringify({ name, email, password }),
     });
 
-    const data = await res.json();
-    if (!res.ok) {
-      return { error: data.error || "Signup failed" };
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      data = { error: (await res.text()) || "Signup failed" };
     }
-  } catch {
-    return { error: "Network error occurred" };
+
+    if (!res.ok) {
+      return { error: data.error || data.message || "Signup failed" };
+    }
+  } catch (err: any) {
+    console.error("[AuthAction] Signup error:", err);
+    return { error: err?.message || "Network error occurred" };
   }
 
   redirect(`/verify?email=${encodeURIComponent(email)}`);

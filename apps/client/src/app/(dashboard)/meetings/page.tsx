@@ -2,6 +2,8 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { Video, CalendarPlus } from "lucide-react";
 import { createInstantMeetingAction } from "../../../actions/meeting.actions";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { PersonalRoomCard } from "../../../features/meetings/personal-room-card";
 import { MeetingTemplateCard } from "../../../features/meetings/meeting-template-card";
 import { CreateTemplateModal } from "../../../features/meetings/create-template-modal";
@@ -12,7 +14,7 @@ export const metadata: Metadata = {
   description: "Schedule, manage, and start instant video meetings and recurring sessions.",
 };
 
-const API_BASE = process.env.API_URL || "http://localhost:4000";
+const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 async function getMeetingsData(userId: string) {
   try {
@@ -99,7 +101,29 @@ async function getMeetingsData(userId: string) {
 }
 
 export default async function MeetingsPage() {
-  const userId = "0191eb70-0000-7000-8000-000000000001";
+  const cookieStore = await cookies();
+  const token = cookieStore.get("accessToken")?.value;
+  if (!token) {
+    redirect("/login");
+  }
+
+  let user: any = null;
+  try {
+    const userRes = await fetch(`${API_BASE}/api/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (userRes.ok) {
+      const data = await userRes.json();
+      user = data.user;
+    }
+  } catch {}
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const userId = user.id;
   const { meetings, personalRoom, templates } = await getMeetingsData(userId);
 
   return (
@@ -136,7 +160,7 @@ export default async function MeetingsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
-          <PersonalRoomCard slug={personalRoom.slug} hostName="Shakil" />
+          <PersonalRoomCard slug={personalRoom.slug} hostName={user.name} />
         </div>
 
         <div className="lg:col-span-2 space-y-4">

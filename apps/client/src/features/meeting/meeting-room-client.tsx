@@ -141,7 +141,7 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
       )}
 
       {/* Waiting Room Real-time Management */}
-      <WaitingRoomManager meetingId={slug} hostId="0191eb70-0000-7000-8000-000000000001" />
+      <WaitingRoomManager meetingId={slug} hostId={initialMeeting?.hostId || ""} />
 
       {/* Host Controls Modal with all 10 settings */}
       <HostControlsModal

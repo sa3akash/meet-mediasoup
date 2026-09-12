@@ -1,17 +1,46 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-const API_BASE = process.env.API_URL || "http://localhost:4000";
+const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+async function getSessionUser() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("accessToken")?.value;
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.user || null;
+    }
+  } catch {}
+  return null;
+}
 
 export async function createInstantMeetingAction(
   hostIdOrFormData?: string | FormData,
   _formData?: FormData
 ) {
-  const hostId = typeof hostIdOrFormData === "string" 
-    ? hostIdOrFormData 
-    : "0191eb70-0000-7000-8000-000000000001";
+  let hostId: string | null =
+    typeof hostIdOrFormData === "string" && hostIdOrFormData.length > 10 && hostIdOrFormData !== "0191eb70-0000-7000-8000-000000000001"
+      ? hostIdOrFormData
+      : null;
+
+  if (!hostId) {
+    const user = await getSessionUser();
+    hostId = user?.id || null;
+  }
+
+  if (!hostId) {
+    redirect("/login");
+  }
 
   let slug = "";
   try {
@@ -37,7 +66,14 @@ export async function createInstantMeetingAction(
 }
 
 export async function createMeetingAction(prevState: any, formData: FormData) {
-  const hostId = (formData.get("hostId") as string) || "0191eb70-0000-7000-8000-000000000001";
+  let hostId = (formData.get("hostId") as string) || "";
+  if (!hostId || hostId === "0191eb70-0000-7000-8000-000000000001") {
+    const user = await getSessionUser();
+    hostId = user?.id || "";
+  }
+  if (!hostId) {
+    redirect("/login");
+  }
   const title = (formData.get("title") as string) || "Untitled Meeting";
   const description = (formData.get("description") as string) || "";
   const type = (formData.get("type") as string) || "SCHEDULED";
