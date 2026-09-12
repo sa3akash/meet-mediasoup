@@ -79,19 +79,36 @@ class WorkerPool {
           dtlsParameters: { fingerprints: [{ algorithm: "sha-256", value: "dev" }], role: "auto" },
           appData: opts?.appData || {},
           connect: async () => {},
-          produce: async ({ kind, appData }: any) => ({ id: crypto.randomUUID(), kind, appData, on: () => {} }),
-          consume: async ({ producerId, rtpCapabilities }: any) => ({
-            id: crypto.randomUUID(),
-            producerId,
-            kind: "video",
-            rtpParameters: { codecs: [] },
-            type: "simulcast",
-            on: () => {},
-            setPreferredLayers: async () => {},
-            setMaxSpatialLayer: async () => {},
-            pause: async () => {},
-            resume: async () => {},
-          }),
+          produce: async ({ kind, appData }: any) => {
+            let paused = false;
+            return {
+              id: crypto.randomUUID(),
+              kind,
+              appData: appData || {},
+              paused,
+              pause: async () => { paused = true; },
+              resume: async () => { paused = false; },
+              close: () => {},
+              on: () => {},
+            };
+          },
+          consume: async ({ producerId, rtpCapabilities }: any) => {
+            let paused = false;
+            return {
+              id: crypto.randomUUID(),
+              producerId,
+              kind: "video",
+              rtpParameters: { codecs: [] },
+              type: "simulcast",
+              paused,
+              on: () => {},
+              setPreferredLayers: async () => {},
+              setMaxSpatialLayer: async () => {},
+              pause: async () => { paused = true; },
+              resume: async () => { paused = false; },
+              close: () => {},
+            };
+          },
           restartIce: async () => ({ usernameFragment: "dev-restart", password: "dev-restart" }),
           on: () => {},
           close: () => {},

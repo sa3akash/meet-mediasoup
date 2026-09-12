@@ -9,6 +9,10 @@ interface ControlBarProps {
   onLeave: () => void;
   onSendReaction?: (emoji: string) => void;
   onOpenHostControls?: () => void;
+  onToggleAudio?: () => void;
+  onToggleVideo?: () => void;
+  onToggleScreenShare?: () => void;
+  onToggleHandRaise?: () => void;
   disableScreenShare?: boolean;
   disableReactions?: boolean;
   disableChat?: boolean;
@@ -19,6 +23,10 @@ export function ControlBar({
   onLeave,
   onSendReaction,
   onOpenHostControls,
+  onToggleAudio,
+  onToggleVideo,
+  onToggleScreenShare,
+  onToggleHandRaise,
   disableScreenShare,
   disableReactions,
   disableChat,
@@ -50,7 +58,13 @@ export function ControlBar({
 
       {/* Center: Main Call Controls */}
       <div className="flex items-center gap-3">
-        <MediaButtons disableScreenShare={disableScreenShare} />
+        <MediaButtons
+          disableScreenShare={disableScreenShare}
+          onToggleAudio={onToggleAudio}
+          onToggleVideo={onToggleVideo}
+          onToggleScreenShare={onToggleScreenShare}
+          onToggleHandRaise={onToggleHandRaise}
+        />
         {!disableReactions && <ReactionsPicker onSelectEmoji={onSendReaction} />}
 
         {/* End Call */}

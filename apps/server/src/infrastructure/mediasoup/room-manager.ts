@@ -74,10 +74,23 @@ class MediasoupRoomManager {
     const consumer = await recvTransport.consume({ producerId, rtpCapabilities, paused: false });
     peer.consumers.set(consumer.id, consumer);
 
+    // Retrieve original producer appData (source: "screen" | "webcam" | "mic")
+    const room = this.rooms.get(meetingId);
+    let appData: Record<string, any> = {};
+    if (room) {
+      for (const p of room.values()) {
+        const prod = p.producers.get(producerId);
+        if (prod) {
+          appData = prod.appData || {};
+          break;
+        }
+      }
+    }
+
     consumer.on("transportclose", () => peer.consumers.delete(consumer.id));
     consumer.on("producerclose", () => {
       peer.consumers.delete(consumer.id);
-      consumer.close();
+      if (typeof consumer.close === "function") consumer.close();
     });
 
     return {
@@ -86,7 +99,35 @@ class MediasoupRoomManager {
       kind: consumer.kind,
       rtpParameters: consumer.rtpParameters,
       type: consumer.type,
+      appData,
     };
+  }
+
+  public async pauseProducer(meetingId: string, peerId: string, producerId: string): Promise<void> {
+    const peer = this.getOrCreatePeer(meetingId, peerId);
+    const producer = peer.producers.get(producerId);
+    if (producer && typeof producer.pause === "function") {
+      await producer.pause();
+    }
+  }
+
+  public async resumeProducer(meetingId: string, peerId: string, producerId: string): Promise<void> {
+    const peer = this.getOrCreatePeer(meetingId, peerId);
+    const producer = peer.producers.get(producerId);
+    if (producer && typeof producer.resume === "function") {
+      await producer.resume();
+    }
+  }
+
+  public async closeProducer(meetingId: string, peerId: string, producerId: string): Promise<void> {
+    const peer = this.getOrCreatePeer(meetingId, peerId);
+    const producer = peer.producers.get(producerId);
+    if (producer) {
+      if (typeof producer.close === "function") {
+        producer.close();
+      }
+      peer.producers.delete(producerId);
+    }
   }
 
   public async setConsumerLayers(meetingId: string, peerId: string, consumerId: string, options: LayerOptions) {

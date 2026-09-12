@@ -4,12 +4,30 @@ import { Mic, MicOff, Video, VideoOff, ScreenShare, Hand } from "lucide-react";
 import { useMediaStore } from "../../../stores/media-store";
 import { useMeetingStore } from "../../../stores/meeting-store";
 
-export function MediaButtons({ disableScreenShare }: { disableScreenShare?: boolean }) {
+interface MediaButtonsProps {
+  disableScreenShare?: boolean;
+  onToggleAudio?: () => void;
+  onToggleVideo?: () => void;
+  onToggleScreenShare?: () => void;
+  onToggleHandRaise?: () => void;
+}
+
+export function MediaButtons({
+  disableScreenShare,
+  onToggleAudio,
+  onToggleVideo,
+  onToggleScreenShare,
+  onToggleHandRaise,
+}: MediaButtonsProps) {
   const { isAudioMuted, isVideoMuted, isScreenSharing, toggleAudio, toggleVideo, setScreenSharing } = useMediaStore();
   const { isHandRaised, setHandRaised } = useMeetingStore();
 
   const handleScreenShare = async () => {
     if (disableScreenShare) return;
+    if (onToggleScreenShare) {
+      onToggleScreenShare();
+      return;
+    }
     try {
       if (isScreenSharing) {
         setScreenSharing(false);
@@ -23,10 +41,25 @@ export function MediaButtons({ disableScreenShare }: { disableScreenShare?: bool
     }
   };
 
+  const handleAudio = () => {
+    if (onToggleAudio) onToggleAudio();
+    else toggleAudio();
+  };
+
+  const handleVideo = () => {
+    if (onToggleVideo) onToggleVideo();
+    else toggleVideo();
+  };
+
+  const handleHandRaise = () => {
+    if (onToggleHandRaise) onToggleHandRaise();
+    else setHandRaised(!isHandRaised);
+  };
+
   return (
     <>
       <button
-        onClick={toggleAudio}
+        onClick={handleAudio}
         className={`p-3.5 rounded-full transition-all duration-200 shadow-md ${
           isAudioMuted
             ? "bg-red-500 hover:bg-red-600 text-white"
@@ -38,7 +71,7 @@ export function MediaButtons({ disableScreenShare }: { disableScreenShare?: bool
       </button>
 
       <button
-        onClick={toggleVideo}
+        onClick={handleVideo}
         className={`p-3.5 rounded-full transition-all duration-200 shadow-md ${
           isVideoMuted
             ? "bg-red-500 hover:bg-red-600 text-white"
@@ -65,7 +98,7 @@ export function MediaButtons({ disableScreenShare }: { disableScreenShare?: bool
       </button>
 
       <button
-        onClick={() => setHandRaised(!isHandRaised)}
+        onClick={handleHandRaise}
         className={`p-3.5 rounded-full transition-all duration-200 shadow-md ${
           isHandRaised ? "bg-amber-500 text-black font-semibold" : "bg-neutral-800 hover:bg-neutral-700 text-white border border-white/10"
         }`}

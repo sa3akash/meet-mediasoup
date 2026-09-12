@@ -7,6 +7,7 @@ interface VideoTileProps {
   displayName: string;
   avatarUrl?: string | null;
   stream?: MediaStream | null;
+  isVideoMuted?: boolean;
   isMuted?: boolean;
   isActiveSpeaker?: boolean;
   isHandRaised?: boolean;
@@ -19,6 +20,7 @@ export function VideoTile({
   displayName,
   avatarUrl,
   stream,
+  isVideoMuted = false,
   isMuted = false,
   isActiveSpeaker = false,
   isHandRaised = false,
@@ -31,10 +33,12 @@ export function VideoTile({
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(() => {});
     }
   }, [stream]);
 
-  const hasVideo = stream && stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled;
+  const hasTrack = !!(stream && stream.getVideoTracks().length > 0 && stream.getVideoTracks()[0].enabled);
+  const showVideo = !isVideoMuted && hasTrack;
 
   return (
     <div
@@ -47,14 +51,18 @@ export function VideoTile({
         ref={videoRef}
         autoPlay
         playsInline
-        muted={isLocal}
-        className={`w-full h-full object-cover ${!hasVideo ? "hidden" : ""} ${isLocal ? "scale-x-[-1]" : ""}`}
+        muted={true}
+        className={`w-full h-full object-cover ${!showVideo ? "hidden" : ""} ${isLocal ? "scale-x-[-1]" : ""}`}
       />
 
       {/* Avatar Fallback */}
-      {!hasVideo && (
+      {!showVideo && (
         <div className="flex flex-col items-center gap-3">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white text-2xl font-bold shadow-xl">
+          <div
+            className={`w-20 h-20 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white text-2xl font-bold shadow-xl transition-all duration-300 ${
+              isActiveSpeaker ? "ring-4 ring-emerald-500 animate-pulse shadow-emerald-500/30" : ""
+            }`}
+          >
             {avatarUrl ? (
               <img src={avatarUrl} alt={displayName} className="w-full h-full rounded-full object-cover" />
             ) : (

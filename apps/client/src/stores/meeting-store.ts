@@ -48,10 +48,26 @@ export const useMeetingStore = create<MeetingState>((set) => ({
   setMeeting: ({ id, slug, title, isHost }) =>
     set({ meetingId: id, slug, title, isHost }),
 
-  addParticipant: (participant) =>
+  addParticipant: (participant: any) =>
     set((state) => {
+      const id = participant.id || participant.participantId;
+      if (!id) return state;
       const next = new Map(state.participants);
-      next.set(participant.id, participant);
+      const existing = next.get(id);
+      next.set(id, {
+        meetingId: state.meetingId || "",
+        displayName: participant.displayName || "Participant",
+        role: participant.role || "PARTICIPANT",
+        isAudioMuted: participant.isAudioMuted ?? false,
+        isVideoMuted: participant.isVideoMuted ?? false,
+        isScreenSharing: participant.isScreenSharing ?? false,
+        isHandRaised: participant.isHandRaised ?? false,
+        connectionStatus: participant.connectionStatus || "CONNECTED",
+        joinedAt: participant.joinedAt || new Date().toISOString(),
+        ...existing,
+        ...participant,
+        id,
+      });
       return { participants: next };
     }),
 
@@ -68,10 +84,25 @@ export const useMeetingStore = create<MeetingState>((set) => ({
 
   updateParticipant: (participantId, updates) =>
     set((state) => {
+      if (!participantId) return state;
       const next = new Map(state.participants);
       const existing = next.get(participantId);
       if (existing) {
         next.set(participantId, { ...existing, ...updates });
+      } else {
+        next.set(participantId, {
+          id: participantId,
+          meetingId: state.meetingId || "",
+          displayName: "Participant",
+          role: "PARTICIPANT" as any,
+          isAudioMuted: false,
+          isVideoMuted: false,
+          isScreenSharing: false,
+          isHandRaised: false,
+          connectionStatus: "CONNECTED" as any,
+          joinedAt: new Date().toISOString(),
+          ...updates,
+        });
       }
       return { participants: next };
     }),

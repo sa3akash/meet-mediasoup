@@ -17,9 +17,11 @@ class AudioObserverService extends EventEmitter {
     observer.on("volumes", (volumes: Array<{ producer: Producer; volume: number }>) => {
       const highest = volumes[0];
       if (highest) {
+        const peerId = (highest.producer.appData as any)?.peerId;
         this.emit("activeSpeaker", {
           roomId,
           producerId: highest.producer.id,
+          peerId,
           volume: highest.volume,
         });
       }

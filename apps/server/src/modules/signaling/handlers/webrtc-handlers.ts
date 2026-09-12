@@ -71,6 +71,39 @@ export async function handleWebRtcMessage(
       return true;
     }
 
+    case "webrtc:pauseProducer": {
+      const { producerId } = data;
+      await roomManager.pauseProducer(meetingId, participantId, producerId);
+      sendResponse(ws, id, { paused: true });
+      broadcastToRoom(meetingId, {
+        event: "webrtc:producerPaused",
+        data: { producerId, producerPeerId: participantId },
+      }, ws);
+      return true;
+    }
+
+    case "webrtc:resumeProducer": {
+      const { producerId } = data;
+      await roomManager.resumeProducer(meetingId, participantId, producerId);
+      sendResponse(ws, id, { resumed: true });
+      broadcastToRoom(meetingId, {
+        event: "webrtc:producerResumed",
+        data: { producerId, producerPeerId: participantId },
+      }, ws);
+      return true;
+    }
+
+    case "webrtc:closeProducer": {
+      const { producerId } = data;
+      await roomManager.closeProducer(meetingId, participantId, producerId);
+      sendResponse(ws, id, { closed: true });
+      broadcastToRoom(meetingId, {
+        event: "webrtc:producerClosed",
+        data: { producerId, producerPeerId: participantId },
+      }, ws);
+      return true;
+    }
+
     case "webrtc:getWorkerStats": {
       const metrics = await workerPool.getWorkerMetrics();
       sendResponse(ws, id, { workers: metrics });

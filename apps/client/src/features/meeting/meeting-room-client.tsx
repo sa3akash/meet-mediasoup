@@ -39,7 +39,12 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
   const { isChatOpen, isHost, setMeeting, reset: resetMeeting } = useMeetingStore();
   const { resetMedia } = useMediaStore();
 
-  const { sendRequest } = useMediasoup(hasJoined ? slug : "", displayName);
+  const {
+    sendRequest,
+    toggleAudio,
+    toggleVideo,
+    toggleScreenShare,
+  } = useMediasoup(hasJoined ? slug : "", displayName);
 
   useEffect(() => {
     if (initialMeeting) {
@@ -169,6 +174,9 @@ export function MeetingRoomClient({ slug, initialMeeting }: MeetingRoomClientPro
         onLeave={handleLeave}
         onSendReaction={handleSendReaction}
         onOpenHostControls={() => setIsHostControlsOpen(true)}
+        onToggleAudio={toggleAudio}
+        onToggleVideo={toggleVideo}
+        onToggleScreenShare={toggleScreenShare}
         disableScreenShare={!isHost && meetingSettings.disableScreenShare}
         disableReactions={!isHost && meetingSettings.disableReactions}
         disableChat={!isHost && meetingSettings.disableChat}
