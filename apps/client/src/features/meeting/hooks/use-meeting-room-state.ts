@@ -13,6 +13,16 @@ export function useMeetingRoomState(currentUser?: any, initialMeeting?: any) {
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [latestMessageToast, setLatestMessageToast] = useState<{ id: string; senderName: string; content: string } | null>(null);
   const [activeReaction, setActiveReaction] = useState<string | null>(null);
+  const [floatingReactions, setFloatingReactions] = useState<Array<{ id: string; emoji: string; x: number }>>([]);
+
+  const triggerReaction = useCallback((emoji: string) => {
+    const id = crypto.randomUUID();
+    const x = Math.floor(Math.random() * 60) + 20;
+    setFloatingReactions((prev) => [...prev, { id, emoji, x }]);
+    setTimeout(() => {
+      setFloatingReactions((prev) => prev.filter((r) => r.id !== id));
+    }, 2500);
+  }, []);
   const [isHostControlsOpen, setIsHostControlsOpen] = useState(false);
   const [meetingSettings, setMeetingSettings] = useState<any>(initialMeeting?.settings || {});
   const [meetingEndedModal, setMeetingEndedModal] = useState(false);
@@ -44,6 +54,7 @@ export function useMeetingRoomState(currentUser?: any, initialMeeting?: any) {
     unreadMessagesCount, setUnreadMessagesCount,
     latestMessageToast, setLatestMessageToast,
     activeReaction, setActiveReaction,
+    floatingReactions, triggerReaction,
     isHostControlsOpen, setIsHostControlsOpen,
     meetingSettings, setMeetingSettings,
     meetingEndedModal, setMeetingEndedModal,

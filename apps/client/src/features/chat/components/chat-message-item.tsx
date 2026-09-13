@@ -54,8 +54,8 @@ export function ChatMessageItem({
         )}
       </div>
 
-      {/* Hover action menu */}
-      <div className={`absolute -top-3 z-20 hidden group-hover:flex items-center gap-1 bg-neutral-800/95 border border-white/10 rounded-full px-2 py-1 shadow-lg ${msg.isSelf ? "right-2" : "left-2"}`}>
+      {/* Action menu */}
+      <div className={`absolute -top-3 z-20 flex md:opacity-0 md:group-hover:opacity-100 transition-opacity items-center gap-1 bg-neutral-800/95 border border-white/10 rounded-full px-2 py-1 shadow-lg ${msg.isSelf ? "right-2" : "left-2"}`}>
         <div className="relative">
           <button onClick={() => setActiveReactionMessageId(activeReactionMessageId === msg.id ? null : msg.id)} className="p-1 text-white/60 hover:text-yellow-400">
             <Smile className="w-3.5 h-3.5" />
@@ -118,6 +118,26 @@ export function ChatMessageItem({
             <span className="truncate font-semibold">{msg.linkPreview.title}</span>
             <ExternalLink className="w-3.5 h-3.5 shrink-0" />
           </a>
+        )}
+
+        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1 pt-1 border-t border-white/10">
+            {Object.entries(msg.reactions).map(([emoji, users]) => {
+              if (!users || users.length === 0) return null;
+              return (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => onReactMessage?.(msg.id, emoji)}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-black/25 hover:bg-black/40 border border-white/10 text-white/90 hover:scale-105 transition-all"
+                  title={`${users.length} reaction${users.length > 1 ? "s" : ""}`}
+                >
+                  <span>{emoji}</span>
+                  <span className="text-[10px] font-bold text-white/75">{users.length}</span>
+                </button>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

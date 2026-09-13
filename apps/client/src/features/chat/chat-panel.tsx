@@ -79,7 +79,7 @@ export function ChatPanel({
   };
 
   return (
-    <div className="w-80 md:w-96 h-full bg-neutral-900 border-l border-white/10 flex flex-col z-30 animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-0 md:relative md:inset-auto w-full md:w-80 lg:w-96 h-full bg-neutral-900 border-l border-white/10 flex flex-col z-40 md:z-30 animate-in slide-in-from-right duration-200">
       <ChatHeader isSearchOpen={isSearchOpen} setIsSearchOpen={setIsSearchOpen} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onExportChat={onExportChat} onClose={toggleChat} />
 
       {pinnedMessage && (

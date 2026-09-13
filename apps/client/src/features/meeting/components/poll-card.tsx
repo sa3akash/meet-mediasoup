@@ -1,5 +1,6 @@
 import React from "react";
 import { CheckCircle2, Radio, StopCircle } from "lucide-react";
+import { useMeetingStore } from "../../../stores/meeting-store";
 import type { PollData } from "../../../hooks/use-mediasoup";
 
 interface PollCardProps {
@@ -21,7 +22,10 @@ export function PollCard({
   isVoting,
   onEndPoll,
 }: PollCardProps) {
-  const hasVoted = poll.userVotedIndex !== undefined;
+  const { myParticipantId } = useMeetingStore();
+  const votesObj = (poll as any).votes as Record<string, number> | undefined;
+  const userPick = poll.userVotedIndex ?? (myParticipantId && votesObj ? votesObj[myParticipantId] : undefined);
+  const hasVoted = userPick !== undefined;
   const canVote = poll.isActive && !hasVoted;
 
   return (
@@ -30,7 +34,7 @@ export function PollCard({
         <div>
           <h4 className="text-white font-semibold text-sm leading-snug">{poll.question}</h4>
           <span className="text-[10px] text-neutral-400">
-            By {poll.createdByName || "Host"} • {new Date(poll.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            By {poll.createdByName || (poll as any).creatorName || "Host"} • {new Date(poll.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
         </div>
         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${poll.isActive ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20" : "bg-white/10 text-white/50"}`}>
@@ -43,7 +47,7 @@ export function PollCard({
           const voteCount = Number(opt.votesCount ?? opt.votes ?? 0);
           const total = Number(poll.totalVotes ?? 0);
           const percentage = total > 0 && !isNaN(voteCount) ? Math.round((voteCount / total) * 100) : 0;
-          const isUserPick = poll.userVotedIndex === idx;
+          const isUserPick = userPick === idx;
 
           if (canVote) {
             return (

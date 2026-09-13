@@ -55,6 +55,11 @@ export function useMediasoupCollabActions(
     [sendRequest]
   );
 
+  const sendReaction = useCallback(
+    async (emoji: string) => sendRequest("reaction:add", { emoji }),
+    [sendRequest]
+  );
+
   const reactToChatMessage = useCallback(
     async (messageId: string, emoji: string) =>
       sendRequest("chat:react", { messageId, emoji }),
@@ -145,6 +150,7 @@ export function useMediasoupCollabActions(
     broadcastToBreakoutRooms,
     endBreakoutRooms,
     sendChatMessage,
+    sendReaction,
     reactToChatMessage,
     deleteChatMessage,
     pinChatMessage,

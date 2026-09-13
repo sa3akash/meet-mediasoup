@@ -22,6 +22,7 @@ interface MeetingOverlaysProps {
   meetingEndedModal: boolean;
   kickedReason: string | null;
   onLeave: () => void;
+  floatingReactions?: Array<{ id: string; emoji: string; x: number }>;
 }
 
 export function MeetingOverlays({
@@ -44,6 +45,7 @@ export function MeetingOverlays({
   meetingEndedModal,
   kickedReason,
   onLeave,
+  floatingReactions,
 }: MeetingOverlaysProps) {
   const dur = recordingType === "LOCAL" ? localDuration : recordingDuration;
   const mins = Math.floor(dur / 60).toString().padStart(2, "0");
@@ -115,6 +117,17 @@ export function MeetingOverlays({
           </div>
         </div>
       )}
+
+      {Boolean(floatingReactions?.length) &&
+        floatingReactions!.map((r) => (
+          <div
+            key={r.id}
+            className="fixed bottom-24 z-50 pointer-events-none select-none animate-float-up text-5xl sm:text-6xl drop-shadow-2xl"
+            style={{ left: `${r.x}%` }}
+          >
+            {r.emoji}
+          </div>
+        ))}
     </>
   );
 }
