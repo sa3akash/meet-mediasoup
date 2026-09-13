@@ -13,6 +13,7 @@ import { useMeetingRoomState } from "./hooks/use-meeting-room-state";
 import { MeetingModals } from "./components/meeting-modals";
 import { MeetingOverlays } from "./components/meeting-overlays";
 import { MeetingSidebars } from "./components/meeting-sidebars";
+import { LocalRecorder, LocalRecordingType } from "../recording/local-recorder";
 
 interface MeetingRoomClientProps {
   slug: string;
@@ -81,6 +82,15 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       onWhiteboardCleared: () => state.setWhiteboardElements([]),
       onChatMessagePinned: (d: any) => setPinnedMessage(d.isPinned ? d.message : null),
       onChatUserMuted: (d: any) => setChatUserMuted(d.targetParticipantId, d.muted),
+      onRecordingStarted: () => {
+        useMeetingStore.getState().setRecordingState(true, "CLOUD");
+      },
+      onRecordingStopped: (d: any) => {
+        useMeetingStore.getState().setRecordingState(false, null);
+        if (d?.downloadUrl) {
+          useMeetingStore.getState().setRecordingDownloadUrl(d.downloadUrl);
+        }
+      },
     },
     isMeetingHost ? "HOST" : "PARTICIPANT",
     state.hasJoined
@@ -106,7 +116,56 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     return state.breakoutState.rooms.find((r: any) => r.participantIds.includes(myParticipantId)) || null;
   }, [state.breakoutState, myParticipantId]);
 
-  const handleLeave = () => { resetMedia(); resetMeeting(); router.push("/meetings"); };
+  const handleLeave = () => {
+    if (state.localRecorderRef.current) {
+      state.localRecorderRef.current.stop();
+      state.localRecorderRef.current = null;
+    }
+    resetMedia();
+    resetMeeting();
+    router.push("/meetings");
+  };
+
+  useEffect(() => {
+    return () => {
+      if (state.localRecorderRef.current) {
+        state.localRecorderRef.current.stop();
+        state.localRecorderRef.current = null;
+      }
+    };
+  }, [state.localRecorderRef]);
+
+  const handleStartLocalRecording = async (type: LocalRecordingType) => {
+    const { localStream, screenStream, remoteStreams } = useMediaStore.getState();
+    const recorder = new LocalRecorder({
+      recordType: type,
+      localStream,
+      screenStream,
+      remoteStreams,
+      meetingTitle: initialMeeting?.title || `Meeting ${slug}`,
+      onDurationUpdate: (secs) => {
+        state.setLocalDuration(secs);
+        useMeetingStore.getState().setRecordingDuration(secs);
+      },
+      onStop: (url) => {
+        useMeetingStore.getState().setRecordingState(false, null);
+        useMeetingStore.getState().setRecordingDownloadUrl(url);
+        state.setLocalDuration(0);
+      },
+    });
+    state.localRecorderRef.current = recorder;
+    await recorder.start();
+    useMeetingStore.getState().setRecordingState(true, "LOCAL");
+  };
+
+  const handleStopLocalRecording = () => {
+    if (state.localRecorderRef.current) {
+      state.localRecorderRef.current.stop();
+      state.localRecorderRef.current = null;
+    }
+    useMeetingStore.getState().setRecordingState(false, null);
+    state.setLocalDuration(0);
+  };
 
   const handleSendMessage = async (content: string, opts?: any) => {
     const messageId = crypto.randomUUID();
@@ -207,7 +266,9 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         onDeleteWhiteboardElement={soup.sendWhiteboardDelete}
         onClearWhiteboard={soup.sendWhiteboardClear}
         onFetchWhiteboard={soup.fetchWhiteboardState} remoteWhiteboardElements={state.whiteboardElements} onStartCloudRecording={soup.startCloudRecording}
-        onStopCloudRecording={soup.stopCloudRecording} onStartLocalRecording={async () => {}} onStopLocalRecording={async () => {}}
+        onStopCloudRecording={soup.stopCloudRecording}
+        onStartLocalRecording={handleStartLocalRecording}
+        onStopLocalRecording={handleStopLocalRecording}
       />
 
       <MeetingOverlays

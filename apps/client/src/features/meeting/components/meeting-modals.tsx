@@ -42,10 +42,10 @@ interface MeetingModalsProps {
   onClearWhiteboard: () => Promise<any>;
   onFetchWhiteboard: () => Promise<any>;
   remoteWhiteboardElements: any[];
-  onStartCloudRecording: () => Promise<any>;
+  onStartCloudRecording: (recordType: any) => Promise<any>;
   onStopCloudRecording: () => Promise<any>;
-  onStartLocalRecording: () => Promise<any>;
-  onStopLocalRecording: () => Promise<any>;
+  onStartLocalRecording: (recordType: any) => Promise<any>;
+  onStopLocalRecording: () => void | Promise<any>;
 }
 
 export function MeetingModals(props: MeetingModalsProps) {
