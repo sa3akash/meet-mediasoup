@@ -19,7 +19,8 @@ export function useMediasoup(
   displayName: string,
   userId?: string,
   callbacks?: UseMediasoupCallbacks,
-  role: "HOST" | "CO_HOST" | "PARTICIPANT" = "PARTICIPANT"
+  role: "HOST" | "CO_HOST" | "PARTICIPANT" = "PARTICIPANT",
+  hasJoined: boolean = true
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const myParticipantIdRef = useRef<string | null>(null);
@@ -51,7 +52,7 @@ export function useMediasoup(
   );
 
   useEffect(() => {
-    if (!meetingId) return;
+    if (!meetingId || !hasJoined) return;
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
@@ -125,6 +126,7 @@ export function useMediasoup(
     setMyRole,
     createPeerConnection,
     initiatePeerConnection,
+    hasJoined,
   ]);
 
   return {

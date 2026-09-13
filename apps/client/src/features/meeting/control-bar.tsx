@@ -65,6 +65,7 @@ export function ControlBar({
           disableScreenShare={disableScreenShare}
           onToggleAudio={onToggleAudio}
           onToggleVideo={onToggleVideo}
+          onToggleScreenShare={onToggleScreenShare || onOpenScreenShareModal}
           onToggleHandRaise={onToggleHandRaise}
         />
         {!disableReactions && <ReactionsPicker onSelectEmoji={onSendReaction} />}

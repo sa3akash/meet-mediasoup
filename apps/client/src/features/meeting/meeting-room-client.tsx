@@ -31,14 +31,24 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
     recordingDuration, setPinnedMessage, setChatUserMuted, myParticipantId,
     isHandRaised, setHandRaised,
   } = useMeetingStore();
-  const { resetMedia } = useMediaStore();
+  const { resetMedia, isScreenSharing } = useMediaStore();
 
   const isMeetingHost = Boolean((currentUser?.id && initialMeeting?.hostId && currentUser.id === initialMeeting.hostId) || initialMeeting?.isHost || (!initialMeeting?.hostId && !currentUser?.id));
 
   const soup = useMediasoup(
     slug, state.displayName, currentUser?.id,
     {
-      onChatMessage: (msg: any) => state.setMessages((prev) => [...prev, { ...msg, isSelf: false }]),
+      onChatMessage: (msg: any) => {
+        state.setMessages((prev) => [...prev, { ...msg, isSelf: false }]);
+        if (!isChatOpen) {
+          state.setUnreadMessagesCount((prev) => prev + 1);
+          state.setLatestMessageToast({
+            id: msg.id || crypto.randomUUID(),
+            senderName: msg.senderName || "Someone",
+            content: msg.content || "",
+          });
+        }
+      },
       onChatReacted: (d: any) => d?.messageId && d?.reactions && state.setMessages((prev) => prev.map((m) => (m.id === d.messageId ? { ...m, reactions: d.reactions } : m))),
       onChatMessageDeleted: (d: any) => d?.messageId && state.setMessages((prev) => prev.filter((m) => m.id !== d.messageId)),
       onReactionReceived: (emoji: string) => state.triggerReaction(emoji),
@@ -56,8 +66,16 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       onChatMessagePinned: (d: any) => setPinnedMessage(d.isPinned ? d.message : null),
       onChatUserMuted: (d: any) => setChatUserMuted(d.targetParticipantId, d.muted),
     },
-    isMeetingHost ? "HOST" : "PARTICIPANT"
+    isMeetingHost ? "HOST" : "PARTICIPANT",
+    state.hasJoined
   );
+
+  useEffect(() => {
+    if (isChatOpen) {
+      state.setUnreadMessagesCount(0);
+      state.setLatestMessageToast(null);
+    }
+  }, [isChatOpen]);
 
   useEffect(() => {
     if (initialMeeting) setMeeting({ id: initialMeeting.id, slug: initialMeeting.slug, title: initialMeeting.title || "Meeting", isHost: isMeetingHost });
@@ -75,8 +93,9 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
   const handleLeave = () => { resetMedia(); resetMeeting(); router.push("/meetings"); };
 
   const handleSendMessage = async (content: string, opts?: any) => {
-    state.setMessages((prev) => [...prev, { id: crypto.randomUUID(), senderName: state.displayName, content, createdAt: new Date().toISOString(), isSelf: true, ...opts }]);
-    try { await soup.sendChatMessage(content, opts); } catch (e: any) { alert(e.message || "Failed to send message"); }
+    const messageId = crypto.randomUUID();
+    state.setMessages((prev) => [...prev, { id: messageId, senderName: state.displayName, content, createdAt: new Date().toISOString(), isSelf: true, ...opts }]);
+    try { await soup.sendChatMessage(content, { ...opts, id: messageId }); } catch (e: any) { alert(e.message || "Failed to send message"); }
   };
 
   const handleReactChatMessage = async (messageId: string, emoji: string) => {
@@ -145,8 +164,10 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       <PresenterControlDock onStopShare={soup.stopScreenShare} onPauseShare={soup.pauseScreenShare} onToggleAudio={soup.toggleScreenAudio} />
       <ControlBar
         onLeave={handleLeave} onSendReaction={handleSendReaction} onToggleAudio={soup.toggleAudio}
-        onToggleVideo={soup.toggleVideo} onToggleScreenShare={soup.toggleScreenShare}
-        onOpenScreenShareModal={() => state.setIsScreenShareModalOpen(true)} onToggleHandRaise={handleToggleHandRaise}
+        onToggleVideo={soup.toggleVideo}
+        onToggleScreenShare={isScreenSharing ? soup.stopScreenShare : () => state.setIsScreenShareModalOpen(true)}
+        onOpenScreenShareModal={isScreenSharing ? soup.stopScreenShare : () => state.setIsScreenShareModalOpen(true)}
+        onToggleHandRaise={handleToggleHandRaise}
         onOpenHostControls={() => state.setIsHostControlsOpen(true)} onOpenRecordingModal={() => state.setIsRecordingModalOpen(true)}
         onOpenLiveStreamingModal={toggleStreamingModal} onOpenWhiteboardModal={toggleWhiteboard}
         onOpenFileSharePanel={toggleFileShare} onOpenNotificationCenter={toggleNotificationCenter}

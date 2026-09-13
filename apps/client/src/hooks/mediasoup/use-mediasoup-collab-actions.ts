@@ -43,9 +43,10 @@ export function useMediasoupCollabActions(
   const sendChatMessage = useCallback(
     async (
       content: string,
-      options?: { attachment?: any; replyTo?: any; mentions?: string[]; linkPreview?: any }
+      options?: { id?: string; attachment?: any; replyTo?: any; mentions?: string[]; linkPreview?: any }
     ) =>
       sendRequest("chat:send", {
+        id: options?.id,
         content,
         attachment: options?.attachment,
         replyTo: options?.replyTo,

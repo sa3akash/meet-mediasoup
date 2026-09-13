@@ -103,6 +103,8 @@ export function createMediasoupEventHandler(
           myParticipantId: myParticipantIdRef.current,
           peerConnections: peerConnectionsRef.current!,
           iceCandidatesQueue: iceCandidatesQueueRef.current!,
+          remoteScreenTrackIds: remoteScreenTrackIdsRef.current!,
+          remoteScreenStreamIds: remoteScreenStreamIdsRef.current!,
           createPeerConnection,
           sendRequest,
         });
