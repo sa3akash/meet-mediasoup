@@ -61,6 +61,9 @@ export function handleCollabEvent(msg: any, callbacksRef: { [key: string]: any }
     case "whiteboard:elementUpdated":
       callbacksRef.onWhiteboardElementUpdated?.(msg.data);
       return true;
+    case "whiteboard:elementDeleted":
+      callbacksRef.onWhiteboardElementDeleted?.(msg.data);
+      return true;
     case "whiteboard:cleared":
       callbacksRef.onWhiteboardCleared?.();
       return true;

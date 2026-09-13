@@ -38,6 +38,7 @@ interface MeetingModalsProps {
   onStopStreaming: (destId?: string) => Promise<any>;
   onAddWhiteboardElement: (el: any) => Promise<any>;
   onUpdateWhiteboardElement: (id: string, updates: any) => Promise<any>;
+  onDeleteWhiteboardElement?: (id: string) => Promise<any>;
   onClearWhiteboard: () => Promise<any>;
   onFetchWhiteboard: () => Promise<any>;
   remoteWhiteboardElements: any[];
@@ -97,6 +98,7 @@ export function MeetingModals(props: MeetingModalsProps) {
         onClose={props.toggleWhiteboard}
         onAddElement={props.onAddWhiteboardElement}
         onUpdateElement={props.onUpdateWhiteboardElement}
+        onDeleteElement={props.onDeleteWhiteboardElement}
         onClearBoard={props.onClearWhiteboard}
         onFetchState={props.onFetchWhiteboard}
         remoteElements={props.remoteWhiteboardElements}

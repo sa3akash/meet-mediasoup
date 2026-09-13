@@ -60,8 +60,24 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
       onPollEnded: (pollId: string, p: any) => { const id = pollId || p?.id; if (id) state.setPolls((prev) => prev.map((x) => (x.id === id ? { ...x, isActive: false, ...(p || {}) } : x))); },
       onBreakoutStarted: (d: any) => state.setBreakoutState(d),
       onBreakoutBroadcast: (d: any) => { state.setBreakoutBroadcastToast(d); setTimeout(() => state.setBreakoutBroadcastToast(null), 6000); },
-      onBreakoutEnded: () => state.setBreakoutState(null),
-      onWhiteboardElementAdded: (d: any) => d?.element && state.setWhiteboardElements((prev) => [...prev, d.element]),
+      onWhiteboardElementAdded: (d: any) => {
+        const el = d?.element || d;
+        if (el?.id) state.setWhiteboardElements((prev) => [...prev.filter((x) => x.id !== el.id), el]);
+      },
+      onWhiteboardElementUpdated: (d: any) => {
+        const el = d?.element || d;
+        if (el?.id) {
+          state.setWhiteboardElements((prev) =>
+            prev.map((x) => (x.id === el.id ? { ...x, ...el, data: { ...x.data, ...(el.data || {}) } } : x))
+          );
+        }
+      },
+      onWhiteboardElementDeleted: (d: any) => {
+        const id = d?.elementId || d?.id;
+        if (id) {
+          state.setWhiteboardElements((prev) => prev.filter((x) => x.id !== id));
+        }
+      },
       onWhiteboardCleared: () => state.setWhiteboardElements([]),
       onChatMessagePinned: (d: any) => setPinnedMessage(d.isPinned ? d.message : null),
       onChatUserMuted: (d: any) => setChatUserMuted(d.targetParticipantId, d.muted),
@@ -186,7 +202,10 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         setIsReportModalOpen={state.setIsReportModalOpen} reportingTarget={state.reportingTarget} currentUserId={currentUser?.id}
         onBroadcastSettings={async (s) => soup.sendRequest("meeting:updateSettings", { settings: s })} onEndMeetingForAll={async () => soup.sendRequest("meeting:endForAll")}
         onStartBreakout={soup.startBreakoutRooms} onStartShare={soup.startScreenShare} onStartStreaming={soup.startLiveStream} onStopStreaming={soup.stopLiveStream}
-        onAddWhiteboardElement={soup.sendWhiteboardElement} onUpdateWhiteboardElement={soup.sendWhiteboardUpdate} onClearWhiteboard={soup.sendWhiteboardClear}
+        onAddWhiteboardElement={soup.sendWhiteboardElement}
+        onUpdateWhiteboardElement={soup.sendWhiteboardUpdate}
+        onDeleteWhiteboardElement={soup.sendWhiteboardDelete}
+        onClearWhiteboard={soup.sendWhiteboardClear}
         onFetchWhiteboard={soup.fetchWhiteboardState} remoteWhiteboardElements={state.whiteboardElements} onStartCloudRecording={soup.startCloudRecording}
         onStopCloudRecording={soup.stopCloudRecording} onStartLocalRecording={async () => {}} onStopLocalRecording={async () => {}}
       />

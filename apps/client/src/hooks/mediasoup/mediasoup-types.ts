@@ -85,6 +85,7 @@ export interface UseMediasoupCallbacks {
   onLiveStreamingStopped?: (data: any) => void;
   onWhiteboardElementAdded?: (data: any) => void;
   onWhiteboardElementUpdated?: (data: any) => void;
+  onWhiteboardElementDeleted?: (data: any) => void;
   onWhiteboardCleared?: () => void;
   onFileUploaded?: (data: any) => void;
   onFileDeleted?: (data: any) => void;

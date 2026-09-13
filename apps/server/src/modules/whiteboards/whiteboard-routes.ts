@@ -67,6 +67,7 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
           t.Literal("text"),
           t.Literal("rectangle"),
           t.Literal("circle"),
+          t.Literal("triangle"),
           t.Literal("line"),
           t.Literal("arrow"),
         ]),
@@ -74,6 +75,7 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
         createdBy: t.Optional(t.String()),
         createdByName: t.Optional(t.String()),
         color: t.Optional(t.String()),
+        fillColor: t.Optional(t.String()),
         strokeWidth: t.Optional(t.Number()),
         createdAt: t.Optional(t.String()),
         updatedAt: t.Optional(t.String()),
@@ -115,6 +117,7 @@ export const whiteboardRoutes = new Elysia({ prefix: "/api/whiteboards" })
       body: t.Object({
         data: t.Optional(t.Any()),
         color: t.Optional(t.String()),
+        fillColor: t.Optional(t.String()),
         strokeWidth: t.Optional(t.Number()),
       }),
     }

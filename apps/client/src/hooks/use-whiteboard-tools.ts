@@ -2,11 +2,25 @@
 
 import { useState, useCallback } from "react";
 import type { WhiteboardTool, WhiteboardElement } from "../features/whiteboard/whiteboard-types";
+import { STICKY_COLORS } from "../features/whiteboard/whiteboard-types";
 
 export function useWhiteboardTools() {
-  const [tool, setTool] = useState<WhiteboardTool>("pen");
+  const [tool, setTool] = useState<WhiteboardTool>("select");
   const [color, setColor] = useState("#FFFFFF");
-  const [strokeWidth, setStrokeWidth] = useState(3);
+  const [fillColor, setFillColor] = useState<string | undefined>(undefined);
+  const [stickyColor, setStickyColor] = useState(STICKY_COLORS[0]);
+  const [strokeWidth, setStrokeWidth] = useState(4);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Viewport Zoom & Pan
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const zoomIn = useCallback(() => setScale((s) => Math.min(3, +(s + 0.2).toFixed(1))), []);
+  const zoomOut = useCallback(() => setScale((s) => Math.max(0.4, +(s - 0.2).toFixed(1))), []);
+  const resetZoom = useCallback(() => { setScale(1); setOffset({ x: 0, y: 0 }); }, []);
+
+  // History for Undo / Redo
   const [history, setHistory] = useState<WhiteboardElement[][]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
 
@@ -37,17 +51,36 @@ export function useWhiteboardTools() {
     return null;
   }, [canRedo, history, historyIndex]);
 
+  const clearHistory = useCallback(() => {
+    setHistory([]);
+    setHistoryIndex(-1);
+  }, []);
+
   return {
     tool,
     setTool,
     color,
     setColor,
+    fillColor,
+    setFillColor,
+    stickyColor,
+    setStickyColor,
     strokeWidth,
     setStrokeWidth,
+    selectedId,
+    setSelectedId,
+    scale,
+    setScale,
+    offset,
+    setOffset,
+    zoomIn,
+    zoomOut,
+    resetZoom,
     canUndo,
     canRedo,
     undo,
     redo,
     pushHistory,
+    clearHistory,
   };
 }

@@ -100,6 +100,12 @@ export function useMediasoupCollabActions(
     [sendRequest]
   );
 
+  const sendWhiteboardDelete = useCallback(
+    async (elementId: string) =>
+      sendRequest("whiteboard:deleteElement", { elementId }),
+    [sendRequest]
+  );
+
   const sendWhiteboardClear = useCallback(
     async () => sendRequest("whiteboard:clear", {}),
     [sendRequest]
@@ -159,6 +165,7 @@ export function useMediasoupCollabActions(
     exportMeetingChat,
     sendWhiteboardElement,
     sendWhiteboardUpdate,
+    sendWhiteboardDelete,
     sendWhiteboardClear,
     fetchWhiteboardState,
     uploadSharedFile,

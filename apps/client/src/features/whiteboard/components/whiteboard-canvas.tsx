@@ -1,121 +1,419 @@
-import React, { useRef, useEffect, useCallback, useState } from "react";
+"use client";
+
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import type { WhiteboardElement, WhiteboardTool } from "../whiteboard-types";
+import { hitTestElement, moveElementBy } from "./whiteboard-hit-test";
+import { drawWhiteboardGrid, drawElement, drawSelectionBox, drawLaserTrail, type LaserPoint } from "./whiteboard-render";
 
 interface WhiteboardCanvasProps {
   elements: WhiteboardElement[];
   tool: WhiteboardTool;
   color: string;
+  fillColor?: string;
   strokeWidth: number;
+  stickyColor: { name: string; value: string; text: string };
+  selectedId: string | null;
+  setSelectedId: (id: string | null) => void;
+  scale: number;
+  offset: { x: number; y: number };
+  setOffset: React.Dispatch<React.SetStateAction<{ x: number; y: number }>>;
   onAddElement: (el: WhiteboardElement) => void;
+  onUpdateElement: (id: string, updates: Partial<WhiteboardElement>) => void;
   onRemoveElement: (id: string) => void;
 }
 
-export function WhiteboardCanvas({
-  elements,
-  tool,
-  color,
-  strokeWidth,
-  onAddElement,
-  onRemoveElement,
-}: WhiteboardCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [currentPath, setCurrentPath] = useState<{ x: number; y: number }[]>([]);
-  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
-  const [textInput, setTextInput] = useState<{ x: number; y: number; value: string } | null>(null);
+export function WhiteboardCanvas(props: WhiteboardCanvasProps) {
+  const {
+    elements, tool, color, fillColor, strokeWidth, stickyColor,
+    selectedId, setSelectedId, scale, offset, setOffset,
+    onAddElement, onUpdateElement, onRemoveElement,
+  } = props;
 
-  const renderCanvas = useCallback(() => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [cssSize, setCssSize] = useState({ width: 800, height: 600 });
+
+  // Local elements state for 60fps drag without network lag
+  const [localElements, setLocalElements] = useState<WhiteboardElement[]>(elements);
+  const [isPointerDown, setIsPointerDown] = useState(false);
+  const [isDraggingElement, setIsDraggingElement] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const hasMovedRef = useRef(false);
+  const panStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Drawing state
+  const [drawingPoints, setDrawingPoints] = useState<{ x: number; y: number }[]>([]);
+  const [shapeStart, setShapeStart] = useState<{ x: number; y: number } | null>(null);
+  const [shapeCurrent, setShapeCurrent] = useState<{ x: number; y: number } | null>(null);
+  const [laserTrail, setLaserTrail] = useState<LaserPoint[]>([]);
+  const [activeTextInput, setActiveTextInput] = useState<{ x: number; y: number; text: string; isSticky?: boolean; editId?: string } | null>(null);
+  const [isHoveringElement, setIsHoveringElement] = useState(false);
+  const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
+
+  // Sync canvas dimensions with parent container and handle high-DPI screens
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const rect = container.getBoundingClientRect();
+      const w = Math.floor(rect.width);
+      const h = Math.floor(rect.height);
+      if (w > 20 && h > 20) {
+        setCssSize({ width: w, height: h });
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = Math.round(w * dpr);
+          canvas.height = Math.round(h * dpr);
+        }
+      }
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(container);
+    window.addEventListener("resize", updateSize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateSize);
+    };
+  }, []);
+
+  // Keep localElements in sync with external elements when not dragging
+  useEffect(() => {
+    if (!isDraggingElement) {
+      setLocalElements(elements);
+    }
+  }, [elements, isDraggingElement]);
+
+  // Exact 1:1 CSS pixel to world coordinates conversion
+  const screenToWorld = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
+
+    // Standardize client coordinates relative to the canvas CSS bounding box
+    const sx = clientX - rect.left;
+    const sy = clientY - rect.top;
+
+    return {
+      x: (sx - offset.x) / scale,
+      y: (sy - offset.y) / scale,
+    };
+  }, [offset, scale]);
+
+  // Main Canvas Render
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const dpr = window.devicePixelRatio || 1;
+    ctx.save();
+    ctx.scale(dpr, dpr);
 
-    // Grid background
-    ctx.strokeStyle = "#1e293b";
-    ctx.lineWidth = 0.5;
-    for (let x = 0; x < canvas.width; x += 30) {
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-    }
-    for (let y = 0; y < canvas.height; y += 30) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-    }
+    const w = cssSize.width;
+    const h = cssSize.height;
 
-    elements.forEach((el) => {
-      ctx.save();
-      ctx.strokeStyle = el.color; ctx.fillStyle = el.color; ctx.lineWidth = el.strokeWidth;
-      ctx.lineCap = "round"; ctx.lineJoin = "round";
+    drawWhiteboardGrid(ctx, w, h, scale, offset);
 
-      if (el.type === "path" && el.data.points?.length > 1) {
-        ctx.beginPath(); ctx.moveTo(el.data.points[0].x, el.data.points[0].y);
-        for (let i = 1; i < el.data.points.length; i++) ctx.lineTo(el.data.points[i].x, el.data.points[i].y);
-        ctx.stroke();
-      } else if (el.type === "rectangle") ctx.strokeRect(el.data.x, el.data.y, el.data.width, el.data.height);
-      else if (el.type === "circle") {
-        ctx.beginPath(); ctx.arc(el.data.x, el.data.y, Math.abs(el.data.radius), 0, Math.PI * 2); ctx.stroke();
-      } else if (el.type === "line" || el.type === "arrow") {
-        ctx.beginPath(); ctx.moveTo(el.data.x1, el.data.y1); ctx.lineTo(el.data.x2, el.data.y2); ctx.stroke();
-      } else if (el.type === "sticky") {
-        ctx.fillStyle = el.data.noteColor || "#FDE047"; ctx.fillRect(el.data.x, el.data.y, 140, 120);
-        ctx.fillStyle = "#1e293b"; ctx.font = "bold 13px sans-serif"; ctx.fillText(el.data.text || "Sticky Note", el.data.x + 10, el.data.y + 24, 120);
-      } else if (el.type === "text") {
-        ctx.font = "bold 16px sans-serif"; ctx.fillText(el.data.text || "", el.data.x, el.data.y);
-      }
-      ctx.restore();
+    ctx.translate(offset.x, offset.y);
+    ctx.scale(scale, scale);
+
+    localElements.forEach((el) => {
+      drawElement(ctx, el);
+      if (el.id === selectedId) drawSelectionBox(ctx, el);
     });
 
-    if (isDrawing && currentPath.length > 1 && tool === "pen") {
-      ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = strokeWidth; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(currentPath[0].x, currentPath[0].y);
-      for (let i = 1; i < currentPath.length; i++) ctx.lineTo(currentPath[i].x, currentPath[i].y);
-      ctx.stroke(); ctx.restore();
+    if (isPointerDown) {
+      if ((tool === "pen" || tool === "highlighter") && drawingPoints.length > 1) {
+        drawElement(ctx, {
+          id: "preview", type: "path", color, strokeWidth,
+          data: { points: drawingPoints, isHighlighter: tool === "highlighter" },
+        });
+      } else if (shapeStart && shapeCurrent) {
+        const x = Math.min(shapeStart.x, shapeCurrent.x);
+        const y = Math.min(shapeStart.y, shapeCurrent.y);
+        const sw = Math.abs(shapeCurrent.x - shapeStart.x);
+        const sh = Math.abs(shapeCurrent.y - shapeStart.y);
+        if (tool === "rectangle") {
+          drawElement(ctx, { id: "preview", type: "rectangle", color, fillColor, strokeWidth, data: { x, y, width: sw, height: sh, fillColor } });
+        } else if (tool === "circle") {
+          const r = Math.hypot(shapeCurrent.x - shapeStart.x, shapeCurrent.y - shapeStart.y);
+          drawElement(ctx, { id: "preview", type: "circle", color, fillColor, strokeWidth, data: { x: shapeStart.x, y: shapeStart.y, radius: r, fillColor } });
+        } else if (tool === "triangle") {
+          drawElement(ctx, { id: "preview", type: "triangle", color, fillColor, strokeWidth, data: { x, y, width: sw, height: sh, fillColor } });
+        } else if (tool === "line" || tool === "arrow") {
+          drawElement(ctx, { id: "preview", type: tool, color, strokeWidth, data: { x1: shapeStart.x, y1: shapeStart.y, x2: shapeCurrent.x, y2: shapeCurrent.y } });
+        }
+      }
     }
-  }, [elements, isDrawing, currentPath, tool, color, strokeWidth]);
 
-  useEffect(() => { renderCanvas(); }, [renderCanvas]);
+    if (laserTrail.length) drawLaserTrail(ctx, laserTrail);
 
-  const getCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    return { x: (e.clientX - rect.left) * (canvas.width / rect.width), y: (e.clientY - rect.top) * (canvas.height / rect.height) };
-  };
+    if (tool === "eraser" && cursorWorld) {
+      ctx.save();
+      ctx.strokeStyle = "#f43f5e";
+      ctx.fillStyle = "rgba(244, 63, 94, 0.2)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cursorWorld.x, cursorWorld.y, 20, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const p = getCoords(e);
-    if (tool === "eraser") {
-      const found = elements.find((el) => el.data?.x && Math.abs(el.data.x - p.x) < 25 && Math.abs(el.data.y - p.y) < 25);
-      if (found) onRemoveElement(found.id);
+    ctx.restore();
+  }, [localElements, tool, color, fillColor, strokeWidth, selectedId, scale, offset, isPointerDown, drawingPoints, shapeStart, shapeCurrent, laserTrail, cssSize, cursorWorld]);
+
+  // Laser Fade animation
+  useEffect(() => {
+    if (!laserTrail.length) return;
+    const anim = requestAnimationFrame(() => {
+      const now = Date.now();
+      const fresh = laserTrail.filter((p) => now - p.time < 1500);
+      if (fresh.length !== laserTrail.length) setLaserTrail(fresh);
+    });
+    return () => cancelAnimationFrame(anim);
+  }, [laserTrail]);
+
+  const eraseAtPoint = useCallback((pt: { x: number; y: number }) => {
+    const hit = [...localElements].reverse().find((el) => hitTestElement(el, pt, 24));
+    if (hit) {
+      setLocalElements((prev) => prev.filter((e) => e.id !== hit.id));
+      onRemoveElement(hit.id);
+      if (selectedId === hit.id) setSelectedId(null);
+    }
+  }, [localElements, onRemoveElement, selectedId, setSelectedId]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const w = screenToWorld(e.clientX, e.clientY);
+    setIsPointerDown(true);
+    setCursorWorld(w);
+
+    if (tool === "select") {
+      const hit = [...localElements].reverse().find((el) => hitTestElement(el, w));
+      if (hit) {
+        setSelectedId(hit.id);
+        setIsDraggingElement(true);
+        dragStartRef.current = w;
+        hasMovedRef.current = false;
+      } else {
+        setSelectedId(null);
+      }
       return;
     }
-    if (tool === "text") { setTextInput({ x: p.x, y: p.y, value: "" }); return; }
-    setIsDrawing(true); setStartPoint(p);
-    if (tool === "pen") setCurrentPath([p]);
+
+    if (tool === "pan") {
+      panStartRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    if (tool === "laser") {
+      setLaserTrail((prev) => [...prev, { x: w.x, y: w.y, time: Date.now() }]);
+      return;
+    }
+
+    if (tool === "eraser") {
+      eraseAtPoint(w);
+      return;
+    }
+
+    if (tool === "sticky" || tool === "text") {
+      setActiveTextInput({ x: w.x, y: w.y, text: "", isSticky: tool === "sticky" });
+      return;
+    }
+
+    setShapeStart(w);
+    setShapeCurrent(w);
+    if (tool === "pen" || tool === "highlighter") setDrawingPoints([w]);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    const p = getCoords(e);
-    if (tool === "pen") setCurrentPath((prev) => [...prev, p]);
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const w = screenToWorld(e.clientX, e.clientY);
+    setCursorWorld(w);
+
+    if (tool === "eraser" && isPointerDown) {
+      eraseAtPoint(w);
+      return;
+    }
+
+    if (tool === "select") {
+      const hovering = localElements.some((el) => hitTestElement(el, w));
+      setIsHoveringElement(hovering);
+    }
+
+    if (tool === "laser") {
+      setLaserTrail((prev) => [...prev, { x: w.x, y: w.y, time: Date.now() }]);
+    }
+
+    if (!isPointerDown) return;
+
+    if (tool === "select" && isDraggingElement && selectedId && dragStartRef.current) {
+      const dx = w.x - dragStartRef.current.x;
+      const dy = w.y - dragStartRef.current.y;
+      if (dx !== 0 || dy !== 0) {
+        hasMovedRef.current = true;
+        setLocalElements((prev) =>
+          prev.map((el) => (el.id === selectedId ? moveElementBy(el, dx, dy) : el))
+        );
+        dragStartRef.current = w;
+      }
+      return;
+    }
+
+    if (tool === "pan" && panStartRef.current) {
+      setOffset((prev) => ({ x: prev.x + (e.clientX - panStartRef.current!.x), y: prev.y + (e.clientY - panStartRef.current!.y) }));
+      panStartRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
+    if (tool === "pen" || tool === "highlighter") {
+      setDrawingPoints((pts) => [...pts, w]);
+    } else if (shapeStart) {
+      setShapeCurrent(w);
+    }
   };
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) return;
-    const p = getCoords(e);
-    setIsDrawing(false);
-    if (tool === "pen" && currentPath.length > 1) onAddElement({ id: crypto.randomUUID(), type: "path", data: { points: currentPath }, color, strokeWidth });
-    else if (tool === "rectangle" && startPoint) onAddElement({ id: crypto.randomUUID(), type: "rectangle", data: { x: Math.min(startPoint.x, p.x), y: Math.min(startPoint.y, p.y), width: Math.abs(p.x - startPoint.x), height: Math.abs(p.y - startPoint.y) }, color, strokeWidth });
-    else if (tool === "circle" && startPoint) onAddElement({ id: crypto.randomUUID(), type: "circle", data: { x: startPoint.x, y: startPoint.y, radius: Math.hypot(p.x - startPoint.x, p.y - startPoint.y) }, color, strokeWidth });
-    else if (tool === "line" && startPoint) onAddElement({ id: crypto.randomUUID(), type: "line", data: { x1: startPoint.x, y1: startPoint.y, x2: p.x, y2: p.y }, color, strokeWidth });
-    setCurrentPath([]); setStartPoint(null);
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+    if (!isPointerDown) return;
+    const w = screenToWorld(e.clientX, e.clientY);
+    setIsPointerDown(false);
+
+    if (tool === "select") {
+      if (isDraggingElement && selectedId && hasMovedRef.current) {
+        const finalEl = localElements.find((el) => el.id === selectedId);
+        if (finalEl) onUpdateElement(selectedId, { data: finalEl.data });
+      }
+      setIsDraggingElement(false);
+      dragStartRef.current = null;
+      hasMovedRef.current = false;
+      return;
+    }
+
+    if (tool === "pan") {
+      panStartRef.current = null;
+      return;
+    }
+
+    if ((tool === "pen" || tool === "highlighter") && drawingPoints.length > 1) {
+      onAddElement({
+        id: crypto.randomUUID(), type: "path", color, strokeWidth,
+        data: { points: drawingPoints, isHighlighter: tool === "highlighter" },
+      });
+    } else if (shapeStart && Math.hypot(w.x - shapeStart.x, w.y - shapeStart.y) > 4) {
+      const id = crypto.randomUUID();
+      const x = Math.min(shapeStart.x, w.x);
+      const y = Math.min(shapeStart.y, w.y);
+      const width = Math.abs(w.x - shapeStart.x);
+      const height = Math.abs(w.y - shapeStart.y);
+
+      if (tool === "rectangle") {
+        onAddElement({ id, type: "rectangle", color, fillColor, strokeWidth, data: { x, y, width, height, fillColor } });
+      } else if (tool === "circle") {
+        const radius = Math.hypot(w.x - shapeStart.x, w.y - shapeStart.y);
+        onAddElement({ id, type: "circle", color, fillColor, strokeWidth, data: { x: shapeStart.x, y: shapeStart.y, radius, fillColor } });
+      } else if (tool === "triangle") {
+        onAddElement({ id, type: "triangle", color, fillColor, strokeWidth, data: { x, y, width, height, fillColor } });
+      } else if (tool === "line" || tool === "arrow") {
+        onAddElement({ id, type: tool, color, strokeWidth, data: { x1: shapeStart.x, y1: shapeStart.y, x2: w.x, y2: w.y } });
+      }
+    }
+
+    setDrawingPoints([]);
+    setShapeStart(null);
+    setShapeCurrent(null);
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const w = screenToWorld(e.clientX, e.clientY);
+    const hit = [...localElements].reverse().find((el) => hitTestElement(el, w));
+    if (hit && (hit.type === "sticky" || hit.type === "text")) {
+      setActiveTextInput({
+        x: hit.data.x,
+        y: hit.data.y,
+        text: hit.data.text || "",
+        isSticky: hit.type === "sticky",
+        editId: hit.id,
+      });
+    }
   };
 
   return (
-    <div className="relative flex-1 w-full h-full bg-neutral-950 overflow-hidden">
-      <canvas ref={canvasRef} width={1920} height={1080} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={() => setIsDrawing(false)} className="w-full h-full object-contain cursor-crosshair" />
-      {textInput && (
-        <input autoFocus type="text" value={textInput.value} onChange={(e) => setTextInput({ ...textInput, value: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter" && textInput.value.trim()) { onAddElement({ id: crypto.randomUUID(), type: "text", data: { x: textInput.x, y: textInput.y, text: textInput.value.trim() }, color, strokeWidth }); setTextInput(null); } }} onBlur={() => setTextInput(null)} style={{ left: textInput.x, top: textInput.y }} className="absolute z-20 px-2 py-1 bg-neutral-900 border border-indigo-500 rounded text-sm text-white" />
+    <div ref={containerRef} className="relative flex-1 w-full h-full bg-neutral-950 overflow-hidden select-none">
+      <canvas
+        ref={canvasRef}
+        style={{ width: `${cssSize.width}px`, height: `${cssSize.height}px` }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
+        onPointerLeave={() => { setIsPointerDown(false); setIsDraggingElement(false); setCursorWorld(null); }}
+        className={`block touch-none ${
+          tool === "select" ? (isDraggingElement ? "cursor-grabbing" : isHoveringElement ? "cursor-move" : "cursor-default") : tool === "pan" ? "cursor-grab" : "cursor-crosshair"
+        }`}
+      />
+
+      {activeTextInput && (
+        <div
+          style={{ left: activeTextInput.x * scale + offset.x, top: activeTextInput.y * scale + offset.y }}
+          className="absolute z-30 p-1"
+        >
+          {activeTextInput.isSticky ? (
+            <textarea
+              autoFocus
+              placeholder="Type sticky note..."
+              defaultValue={activeTextInput.text}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                  const val = e.currentTarget.value.trim();
+                  if (val) {
+                    if (activeTextInput.editId) {
+                      onUpdateElement(activeTextInput.editId, { data: { text: val } });
+                    } else {
+                      onAddElement({
+                        id: crypto.randomUUID(), type: "sticky", color: stickyColor.text, strokeWidth: 1,
+                        data: { x: activeTextInput.x, y: activeTextInput.y, text: val, noteColor: stickyColor.value, textColor: stickyColor.text },
+                      });
+                    }
+                  }
+                  setActiveTextInput(null);
+                } else if (e.key === "Escape") setActiveTextInput(null);
+              }}
+              style={{ backgroundColor: stickyColor.value, color: stickyColor.text }}
+              className="w-52 h-44 p-3 rounded-2xl shadow-2xl font-semibold text-sm resize-none outline-none border border-black/10 ring-2 ring-black/20"
+            />
+          ) : (
+            <input
+              autoFocus
+              type="text"
+              placeholder="Type label..."
+              defaultValue={activeTextInput.text}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const val = e.currentTarget.value.trim();
+                  if (val) {
+                    if (activeTextInput.editId) {
+                      onUpdateElement(activeTextInput.editId, { data: { text: val } });
+                    } else {
+                      onAddElement({
+                        id: crypto.randomUUID(), type: "text", color, strokeWidth,
+                        data: { x: activeTextInput.x, y: activeTextInput.y, text: val, fontSize: strokeWidth * 5 + 12 },
+                      });
+                    }
+                  }
+                  setActiveTextInput(null);
+                } else if (e.key === "Escape") setActiveTextInput(null);
+              }}
+              className="px-3 py-1.5 bg-neutral-900 border-2 border-indigo-500 rounded-xl text-white font-bold text-sm outline-none shadow-2xl"
+            />
+          )}
+        </div>
       )}
     </div>
   );
