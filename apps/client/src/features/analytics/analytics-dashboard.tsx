@@ -12,7 +12,7 @@ interface AnalyticsDashboardProps {
   userId?: string;
 }
 
-export function AnalyticsDashboard({ overview, userId: _userId }: AnalyticsDashboardProps) {
+export function AnalyticsDashboard({ overview }: AnalyticsDashboardProps) {
   const [data, setData] = useState(overview || {});
   const [isRefreshing, setIsRefreshing] = useState(false);
 

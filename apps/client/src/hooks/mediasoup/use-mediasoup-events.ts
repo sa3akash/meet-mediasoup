@@ -40,11 +40,13 @@ export function createMediasoupEventHandler(
         if (muted) {
           const { localStream, setAudioMuted, setVideoMuted } = useMediaStore.getState();
           if (mediaType === "audio") {
-            localStream?.getAudioTracks()[0] && (localStream.getAudioTracks()[0].enabled = false);
+            const track = localStream?.getAudioTracks()[0];
+            if (track) track.enabled = false;
             setAudioMuted(true);
             sendRequest("participant:updateMediaState", { isAudioMuted: true }).catch(() => {});
           } else if (mediaType === "video") {
-            localStream?.getVideoTracks()[0] && (localStream.getVideoTracks()[0].enabled = false);
+            const track = localStream?.getVideoTracks()[0];
+            if (track) track.enabled = false;
             setVideoMuted(true);
             sendRequest("participant:updateMediaState", { isVideoMuted: true }).catch(() => {});
           }

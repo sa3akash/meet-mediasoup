@@ -35,8 +35,12 @@ export function WhiteboardCanvas(props: WhiteboardCanvasProps) {
 
   // Local elements state for 60fps drag without network lag
   const [localElements, setLocalElements] = useState<WhiteboardElement[]>(elements);
+ 
   const [isPointerDown, setIsPointerDown] = useState(false);
   const [isDraggingElement, setIsDraggingElement] = useState(false);
+
+   const activeElements = isDraggingElement ? localElements : elements;
+
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const hasMovedRef = useRef(false);
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -80,13 +84,6 @@ export function WhiteboardCanvas(props: WhiteboardCanvasProps) {
     };
   }, []);
 
-  // Keep localElements in sync with external elements when not dragging
-  useEffect(() => {
-    if (!isDraggingElement) {
-      setLocalElements(elements);
-    }
-  }, [elements, isDraggingElement]);
-
   // Exact 1:1 CSS pixel to world coordinates conversion
   const screenToWorld = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
@@ -123,7 +120,7 @@ export function WhiteboardCanvas(props: WhiteboardCanvasProps) {
     ctx.translate(offset.x, offset.y);
     ctx.scale(scale, scale);
 
-    localElements.forEach((el) => {
+    activeElements.forEach((el) => {
       drawElement(ctx, el);
       if (el.id === selectedId) drawSelectionBox(ctx, el);
     });
@@ -167,7 +164,7 @@ export function WhiteboardCanvas(props: WhiteboardCanvasProps) {
     }
 
     ctx.restore();
-  }, [localElements, tool, color, fillColor, strokeWidth, selectedId, scale, offset, isPointerDown, drawingPoints, shapeStart, shapeCurrent, laserTrail, cssSize, cursorWorld]);
+  }, [localElements, tool, color, fillColor, strokeWidth, selectedId, scale, offset, isPointerDown, drawingPoints, shapeStart, shapeCurrent, laserTrail, cssSize, cursorWorld, activeElements]);
 
   // Laser Fade animation
   useEffect(() => {
@@ -196,9 +193,10 @@ export function WhiteboardCanvas(props: WhiteboardCanvasProps) {
     setCursorWorld(w);
 
     if (tool === "select") {
-      const hit = [...localElements].reverse().find((el) => hitTestElement(el, w));
+      const hit = [...activeElements].reverse().find((el) => hitTestElement(el, w));
       if (hit) {
         setSelectedId(hit.id);
+        setLocalElements(elements);
         setIsDraggingElement(true);
         dragStartRef.current = w;
         hasMovedRef.current = false;
@@ -243,7 +241,7 @@ export function WhiteboardCanvas(props: WhiteboardCanvasProps) {
     }
 
     if (tool === "select") {
-      const hovering = localElements.some((el) => hitTestElement(el, w));
+      const hovering = activeElements.some((el) => hitTestElement(el, w));
       setIsHoveringElement(hovering);
     }
 

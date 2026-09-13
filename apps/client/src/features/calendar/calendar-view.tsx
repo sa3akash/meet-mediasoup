@@ -11,7 +11,7 @@ interface CalendarViewProps {
   userId?: string;
 }
 
-export function CalendarView({ initialEvents, userId: _userId }: CalendarViewProps) {
+export function CalendarView({ initialEvents }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedTimezone, setSelectedTimezone] = useState(() => {
     try {

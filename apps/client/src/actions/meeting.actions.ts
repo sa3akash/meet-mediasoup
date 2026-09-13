@@ -26,8 +26,7 @@ async function getSessionUser() {
 }
 
 export async function createInstantMeetingAction(
-  hostIdOrFormData?: string | FormData,
-  _formData?: FormData
+  hostIdOrFormData?: string | FormData
 ) {
   let hostId: string | null =
     typeof hostIdOrFormData === "string" && hostIdOrFormData.length > 10 && hostIdOrFormData !== "0191eb70-0000-7000-8000-000000000001"

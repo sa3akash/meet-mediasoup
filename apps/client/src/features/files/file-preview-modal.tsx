@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { X, Download, ExternalLink, FileText, Film, Image as ImageIcon } from "lucide-react";
+import { X, Download, FileText, Film, Image as ImageIcon } from "lucide-react";
 
 export interface FileItem {
   id: string;

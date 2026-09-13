@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { MeetingState, initialMeetingState, VideoLayout } from "./meeting-store-types";
+import { MeetingState, initialMeetingState } from "./meeting-store-types";
 
 export type { VideoLayout } from "./meeting-store-types";
 

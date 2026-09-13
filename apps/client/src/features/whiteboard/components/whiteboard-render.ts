@@ -117,9 +117,11 @@ export function drawElement(ctx: CanvasRenderingContext2D, el: WhiteboardElement
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 5;
       ctx.fillStyle = noteColor;
-      ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(x, y, width, height, 10) : ctx.rect(x, y, width, height);
-      ctx.fill();
+      if (typeof ctx.roundRect === "function") {
+        ctx.roundRect(x, y, width, height, 10);
+      } else {
+        ctx.rect(x, y, width, height);
+      }
       ctx.shadowColor = "transparent";
 
       ctx.fillStyle = textColor;

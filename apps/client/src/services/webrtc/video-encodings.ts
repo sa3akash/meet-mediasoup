@@ -26,7 +26,7 @@ export function getSimulcastEncodings(): types.RtpEncodingParameters[] {
 export function getSvcEncodings(codec: "VP9" | "AV1" = "VP9"): types.RtpEncodingParameters[] {
   return [
     {
-      maxBitrate: 2500000,
+      maxBitrate: codec === "AV1" ? 2000000 : 2500000,
       scalabilityMode: "L3T3",
       maxFramerate: 30,
     },

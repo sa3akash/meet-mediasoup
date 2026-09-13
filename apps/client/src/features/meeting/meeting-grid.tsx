@@ -43,7 +43,8 @@ export function MeetingGrid({ localDisplayName }: { localDisplayName: string }) 
 
   const getCols = (c: number) => c <= 1 ? "grid-cols-1" : c <= 2 ? "grid-cols-1 sm:grid-cols-2" : c <= 4 ? "grid-cols-2" : c <= 6 ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4";
   const effectiveLayout = activePresenter ? "PRESENTATION" : layoutMode;
-  const pinnedParticipant = pinnedParticipantId ? participants.get(pinnedParticipantId) : null;
+  const pinnedParticipant = (pinnedParticipantId ? participants.get(pinnedParticipantId) : null) ||
+    (spotlightParticipantId ? participants.get(spotlightParticipantId) : null);
 
   return (
     <div className="relative w-full h-full p-2 sm:p-4 flex items-center justify-center bg-neutral-950 overflow-hidden">

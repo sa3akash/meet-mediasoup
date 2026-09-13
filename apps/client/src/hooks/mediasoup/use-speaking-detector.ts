@@ -71,9 +71,10 @@ export function useSpeakingDetector(
         }
       }, 100);
 
+      const myParticipantId = myParticipantIdRef.current;
       return () => {
         clearInterval(interval);
-        if (wasSpeaking && myParticipantIdRef.current) {
+        if (wasSpeaking && myParticipantId) {
           sendRequest("participant:speaking", { isSpeaking: false }).catch(() => {});
         }
         audioCtx.close().catch(() => {});

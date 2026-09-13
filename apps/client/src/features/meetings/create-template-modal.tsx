@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useActionState } from "react";
-import { X, Sparkles, Plus, AlertCircle, CheckCircle2 } from "lucide-react";
+import { X, Sparkles, Plus, AlertCircle } from "lucide-react";
 import { createTemplateAction } from "../../actions/template.actions";
 import { MeetingSettingsChecklist } from "./meeting-settings-checklist";
 

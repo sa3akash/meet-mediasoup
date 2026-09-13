@@ -40,8 +40,10 @@ export const FilesPanel: React.FC<FilesPanelProps> = ({
     }).catch(() => {});
   }, [isOpen, onFetchFiles]);
 
-  useEffect(() => {
-    if (remoteFiles?.length) {
+  const [prevRemoteFiles, setPrevRemoteFiles] = useState<FileItem[]>([]);
+  if (remoteFiles && remoteFiles !== prevRemoteFiles) {
+    setPrevRemoteFiles(remoteFiles);
+    if (remoteFiles.length) {
       setFiles((prev) => {
         const map = new Map<string, FileItem>();
         prev.forEach((f) => map.set(f.id, f));
@@ -49,7 +51,7 @@ export const FilesPanel: React.FC<FilesPanelProps> = ({
         return Array.from(map.values());
       });
     }
-  }, [remoteFiles]);
+  }
 
   if (!isOpen) return null;
 

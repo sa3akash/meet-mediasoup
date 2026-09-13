@@ -6,7 +6,7 @@ interface ReportSuccessProps {
   onClose?: () => void;
 }
 
-export function ReportSuccess({ onClose: _onClose }: ReportSuccessProps) {
+export function ReportSuccess({ onClose }: ReportSuccessProps) {
   return (
     <div className="py-8 flex flex-col items-center justify-center text-center space-y-3">
       <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
@@ -16,6 +16,14 @@ export function ReportSuccess({ onClose: _onClose }: ReportSuccessProps) {
       <p className="text-sm text-neutral-400 max-w-xs">
         Thank you for helping keep the meeting safe. Our moderation team will review this report.
       </p>
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="mt-4 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-medium rounded-xl transition-colors"
+        >
+          Close
+        </button>
+      )}
     </div>
   );
 }

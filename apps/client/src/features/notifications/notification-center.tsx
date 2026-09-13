@@ -14,7 +14,6 @@ interface NotificationCenterProps {
 }
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({
-  userId: _userId,
   isOpen,
   onClose,
   onFetchNotifications,
@@ -34,11 +33,11 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
       .catch(() => {});
   }, [onFetchNotifications]);
 
-  useEffect(() => {
-    if (remoteNotification) {
-      setNotifications((prev) => [remoteNotification, ...prev]);
-    }
-  }, [remoteNotification]);
+  const [prevRemoteId, setPrevRemoteId] = useState<string | null>(null);
+  if (remoteNotification && remoteNotification.id !== prevRemoteId) {
+    setPrevRemoteId(remoteNotification.id);
+    setNotifications((prev) => [remoteNotification, ...prev]);
+  }
 
   if (!isOpen) return null;
 

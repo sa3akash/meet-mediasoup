@@ -55,8 +55,10 @@ export function WhiteboardModal({
       .catch(() => {});
   }, [isOpen, onFetchState, pushHistory]);
 
-  useEffect(() => {
-    if (remoteElements?.length) {
+  const [prevRemoteElements, setPrevRemoteElements] = useState<WhiteboardElement[]>([]);
+  if (remoteElements && remoteElements !== prevRemoteElements) {
+    setPrevRemoteElements(remoteElements);
+    if (remoteElements.length) {
       setElements((prev) => {
         const map = new Map<string, WhiteboardElement>();
         prev.forEach((el) => map.set(el.id, el));
@@ -64,40 +66,40 @@ export function WhiteboardModal({
         return Array.from(map.values());
       });
     }
-  }, [remoteElements]);
+  }
 
-  const handleAdd = (el: WhiteboardElement) => {
+  const handleAdd = useCallback((el: WhiteboardElement) => {
     const next = [...elements, el];
     setElements(next);
     pushHistory(next);
     onAddElement(el).catch(() => {});
-  };
+  },[elements, onAddElement, pushHistory]);
 
-  const handleUpdate = (id: string, updates: Partial<WhiteboardElement>) => {
+  const handleUpdate = useCallback((id: string, updates: Partial<WhiteboardElement>) => {
     setElements((prev) => {
       const next = prev.map((el) => (el.id === id ? { ...el, ...updates, data: { ...el.data, ...(updates.data || {}) } } : el));
       pushHistory(next);
       return next;
     });
     onUpdateElement?.(id, updates).catch(() => {});
-  };
+  },[onUpdateElement, pushHistory]);
 
-  const handleRemove = (id: string) => {
+  const handleRemove = useCallback((id: string) => {
     const next = elements.filter((e) => e.id !== id);
     setElements(next);
     pushHistory(next);
     if (selectedId === id) setSelectedId(null);
     onDeleteElement?.(id).catch(() => {});
-  };
+  },[elements, onDeleteElement, pushHistory, selectedId, setSelectedId]);
 
-  const handleDeleteSelected = () => {
+  const handleDeleteSelected =useCallback( () => {
     if (selectedId) {
       handleRemove(selectedId);
     } else if (elements.length > 0) {
       const last = elements[elements.length - 1];
       if (last) handleRemove(last.id);
     }
-  };
+  },[elements, handleRemove, selectedId]);
 
   const handleColorChange = (newColor: string) => {
     setColor(newColor);
@@ -124,7 +126,7 @@ export function WhiteboardModal({
     }
   };
 
-  const handleDuplicateSelected = () => {
+  const handleDuplicateSelected = useCallback(() => {
     if (!selectedId) return;
     const target = elements.find((el) => el.id === selectedId);
     if (target) {
@@ -133,24 +135,24 @@ export function WhiteboardModal({
       handleAdd({ ...dup, id: newId });
       setSelectedId(newId);
     }
-  };
+  },[selectedId, elements, handleAdd, setSelectedId]);
 
-  const handleUndo = () => {
+  const handleUndo =useCallback( () => {
     const prev = undo();
     if (prev) setElements(prev);
-  };
+  },[undo]);
 
-  const handleRedo = () => {
+  const handleRedo =useCallback( () => {
     const next = redo();
     if (next) setElements(next);
-  };
+  },[redo]);
 
-  const handleClear = () => {
+  const handleClear =useCallback( () => {
     pushHistory(elements);
     setElements([]);
     setSelectedId(null);
     onClearBoard().catch(() => {});
-  };
+  },[elements, onClearBoard, pushHistory, setSelectedId]);
 
   const handleExport = useCallback(() => {
     const canvas = document.createElement("canvas");
@@ -204,7 +206,7 @@ export function WhiteboardModal({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, selectedId, elements, handleUndo, handleRedo]);
+  }, [isOpen, selectedId, elements, handleUndo, handleRedo, handleDeleteSelected, handleDuplicateSelected, handleUpdate]);
 
   if (!isOpen) return null;
 

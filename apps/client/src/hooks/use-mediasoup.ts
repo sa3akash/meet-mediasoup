@@ -108,10 +108,13 @@ export function useMediasoup(
       await handleEvent(msg);
     };
 
+    const peerConnections = peerConnectionsRef.current;
+    const iceCandidatesQueue = iceCandidatesQueueRef.current;
+
     return () => {
-      peerConnectionsRef.current.forEach((pc) => pc.close());
-      peerConnectionsRef.current.clear();
-      iceCandidatesQueueRef.current.clear();
+      peerConnections.forEach((pc) => pc.close());
+      peerConnections.clear();
+      iceCandidatesQueue.clear();
       ws.close();
     };
   }, [

@@ -46,7 +46,6 @@ export function ControlBar({
   onToggleHandRaise,
   disableScreenShare,
   disableReactions,
-  disableChat: _disableChat,
   isLocked,
   unreadMessagesCount = 0,
   unreadNotificationsCount = 0,

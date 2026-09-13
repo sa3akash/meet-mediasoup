@@ -40,7 +40,7 @@ export function ChatPanel({
   const [replyingTo, setReplyingTo] = useState<MessageReplyTo | null>(null);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
   const [showMentions, setShowMentions] = useState(false);
-  const [mentionFilter, setMentionFilter] = useState("");
+  const [mentionFilter] = useState("");
   const [activeReactionMessageId, setActiveReactionMessageId] = useState<string | null>(null);
   const [attachedFile, setAttachedFile] = useState<{ file: File; dataUrl: string } | null>(null);
 

@@ -6,9 +6,6 @@ import {
   Trash2,
   ExternalLink,
   Download,
-  Image as ImageIcon,
-  FileArchive,
-  FileText,
   File as GenericFile,
 } from "lucide-react";
 import type { Message, MessageReplyTo } from "../chat-types";

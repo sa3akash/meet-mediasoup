@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PreJoinLobby } from "../lobby/pre-join-lobby";
 import { MeetingGrid } from "./meeting-grid";
@@ -24,6 +24,7 @@ interface MeetingRoomClientProps {
 export function MeetingRoomClient({ slug, initialMeeting, currentUser }: MeetingRoomClientProps) {
   const router = useRouter();
   const state = useMeetingRoomState(currentUser, initialMeeting);
+  const localRecorderRef = useRef<LocalRecorder | null>(null);
 
   const {
     isChatOpen, toggleChat, isWhiteboardOpen, toggleWhiteboard, isFileShareOpen, toggleFileShare,
@@ -109,7 +110,7 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
 
   useEffect(() => {
     if (state.hasJoined) soup.listPolls().then((res: any) => res?.polls && state.setPolls(res.polls)).catch(() => {});
-  }, [state.hasJoined]);
+  }, [soup, state, state.hasJoined]);
 
   const currentBreakoutRoom = useMemo(() => {
     if (!state.breakoutState?.rooms || !myParticipantId) return null;
@@ -117,9 +118,9 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
   }, [state.breakoutState, myParticipantId]);
 
   const handleLeave = () => {
-    if (state.localRecorderRef.current) {
-      state.localRecorderRef.current.stop();
-      state.localRecorderRef.current = null;
+    if (localRecorderRef.current) {
+      localRecorderRef.current.stop();
+      localRecorderRef.current = null;
     }
     resetMedia();
     resetMeeting();
@@ -128,12 +129,12 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
 
   useEffect(() => {
     return () => {
-      if (state.localRecorderRef.current) {
-        state.localRecorderRef.current.stop();
-        state.localRecorderRef.current = null;
+      if (localRecorderRef.current) {
+        localRecorderRef.current.stop();
+        localRecorderRef.current = null;
       }
     };
-  }, [state.localRecorderRef]);
+  }, []);
 
   const handleStartLocalRecording = async (type: LocalRecordingType) => {
     const { localStream, screenStream, remoteStreams } = useMediaStore.getState();
@@ -153,15 +154,15 @@ export function MeetingRoomClient({ slug, initialMeeting, currentUser }: Meeting
         state.setLocalDuration(0);
       },
     });
-    state.localRecorderRef.current = recorder;
+    localRecorderRef.current = recorder;
     await recorder.start();
     useMeetingStore.getState().setRecordingState(true, "LOCAL");
   };
 
   const handleStopLocalRecording = () => {
-    if (state.localRecorderRef.current) {
-      state.localRecorderRef.current.stop();
-      state.localRecorderRef.current = null;
+    if (localRecorderRef.current) {
+      localRecorderRef.current.stop();
+      localRecorderRef.current = null;
     }
     useMeetingStore.getState().setRecordingState(false, null);
     state.setLocalDuration(0);

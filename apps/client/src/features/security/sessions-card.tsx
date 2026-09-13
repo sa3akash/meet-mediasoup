@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Laptop, Smartphone, Tablet, LogOut } from "lucide-react";
 
 interface SessionItem {
@@ -8,6 +8,7 @@ interface SessionItem {
   deviceName?: string | null;
   deviceType?: string | null;
   ipAddress?: string | null;
+  lastActiveAt?: string | null;
   createdAt: string;
   isCurrent: boolean;
 }
@@ -21,11 +22,7 @@ export function SessionsCard({ apiBase, getAuthHeaders }: SessionsCardProps) {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchSessions();
-  }, []);
-
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     try {
       const res = await fetch(`${apiBase}/api/auth/sessions`, { headers: getAuthHeaders() });
       const data = await res.json();
@@ -35,7 +32,11 @@ export function SessionsCard({ apiBase, getAuthHeaders }: SessionsCardProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiBase, getAuthHeaders]);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   const handleRevokeSession = async (sessionId: string) => {
     try {
