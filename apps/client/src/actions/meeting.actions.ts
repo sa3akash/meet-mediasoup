@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
+
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
 async function getSessionUser() {
@@ -25,8 +26,7 @@ async function getSessionUser() {
 }
 
 export async function createInstantMeetingAction(
-  hostIdOrFormData?: string | FormData,
-  _formData?: FormData
+  hostIdOrFormData?: string | FormData
 ) {
   let hostId: string | null =
     typeof hostIdOrFormData === "string" && hostIdOrFormData.length > 10 && hostIdOrFormData !== "0191eb70-0000-7000-8000-000000000001"
@@ -139,32 +139,6 @@ export async function createMeetingAction(prevState: any, formData: FormData) {
     redirect(`/meeting/${createdSlug}`);
   }
   return { success: true, slug: createdSlug, meeting: createdMeeting };
-}
-
-export async function verifyMeetingAccessAction(
-  slug: string,
-  passcode?: string,
-  email?: string,
-  userId?: string
-) {
-  try {
-    const res = await fetch(`${API_BASE}/api/meetings/code/${slug}/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ passcode, email, userId }),
-      cache: "no-store",
-    });
-    return await res.json();
-  } catch {
-    return { allowed: false, reason: "NETWORK_ERROR", message: "Verification server unavailable" };
-  }
-}
-
-export async function joinMeetingByCodeAction(formData: FormData) {
-  const rawCode = formData.get("code") as string;
-  if (!rawCode || !rawCode.trim()) return;
-  const cleanCode = rawCode.trim().replace(/^https?:\/\/[^\/]+\/meeting\//, "");
-  redirect(`/meeting/${cleanCode}`);
 }
 
 export async function cancelMeetingAction(meetingId: string) {

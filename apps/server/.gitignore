@@ -12,6 +12,8 @@
 /.next/
 /out/
 
+temp_recordings
+
 # production
 /build
 

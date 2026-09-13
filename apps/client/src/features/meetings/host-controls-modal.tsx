@@ -1,31 +1,15 @@
 "use client";
 
-import {
-  X,
-  Lock,
-  Unlock,
-  ShieldAlert,
-  AlertTriangle,
-  Disc,
-  MicOff,
-  VideoOff,
-  MonitorOff,
-  MessageSquareOff,
-  FileText,
-  SmilePlus,
-  Shield,
-  PhoneOff,
-  KeyRound,
-  Check,
-  RefreshCw,
-} from "lucide-react";
+import { useState } from "react";
+import { X, Lock, Unlock, ShieldAlert, PhoneOff } from "lucide-react";
 import {
   lockMeetingAction,
   endMeetingForAllAction,
   updateMeetingSettingsAction,
   updateMeetingPasscodeAction,
 } from "../../actions/meeting-controls.actions";
-import { useState } from "react";
+import { HostPasscodeControl } from "./components/host-passcode-control";
+import { HostRulesList } from "./components/host-rules-list";
 
 interface Props {
   meetingId: string;
@@ -106,66 +90,6 @@ export function HostControlsModal({
     window.location.href = "/meetings";
   };
 
-
-  const SETTING_ITEMS = [
-    {
-      key: "waitingRoomEnabled",
-      label: "Waiting Room",
-      desc: "New participants must be admitted by host",
-      icon: Shield,
-      isDanger: false,
-    },
-    {
-      key: "autoRecording",
-      label: "Auto Cloud Recording",
-      desc: "Record meeting sessions to cloud storage",
-      icon: Disc,
-      isDanger: false,
-    },
-    {
-      key: "muteOnJoin",
-      label: "Mute On Join",
-      desc: "Participants enter with microphone muted",
-      icon: MicOff,
-      isDanger: false,
-    },
-    {
-      key: "cameraOffOnJoin",
-      label: "Disable Camera On Join",
-      desc: "Participants enter with video camera turned off",
-      icon: VideoOff,
-      isDanger: false,
-    },
-    {
-      key: "disableScreenShare",
-      label: "Disable Screen Share",
-      desc: "Restrict screen sharing strictly to hosts",
-      icon: MonitorOff,
-      isDanger: true,
-    },
-    {
-      key: "disableChat",
-      label: "Disable In-Call Chat",
-      desc: "Disallow text messages during this meeting",
-      icon: MessageSquareOff,
-      isDanger: true,
-    },
-    {
-      key: "disableFileShare",
-      label: "Disable File Share",
-      desc: "Prevent file uploads and document sharing",
-      icon: FileText,
-      isDanger: true,
-    },
-    {
-      key: "disableReactions",
-      label: "Disable Reactions",
-      desc: "Turn off animated emoji reactions & applause",
-      icon: SmilePlus,
-      isDanger: true,
-    },
-  ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in">
       <div className="bg-neutral-900 border border-white/10 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 flex flex-col gap-5">
@@ -207,111 +131,18 @@ export function HostControlsModal({
           </button>
         </div>
 
-        {/* Meeting Password / Passcode Section */}
-        <div className="p-4 rounded-2xl bg-neutral-950/60 border border-white/5 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-white text-xs font-semibold flex items-center gap-2">
-                <KeyRound className="w-4 h-4 text-indigo-400" />
-                Meeting Password / Passcode
-              </h4>
-              <p className="text-neutral-400 text-[11px] mt-0.5">
-                Require participants to enter a PIN or secret password to join
-              </p>
-            </div>
-            {passcode && (
-              <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold">
-                PROTECTED
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                placeholder="Set room password / PIN (e.g. 123456)"
-                className="w-full bg-neutral-900 border border-white/10 focus:border-indigo-500 rounded-xl px-3.5 py-2 text-white text-xs placeholder:text-neutral-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono tracking-wider"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleGeneratePasscode}
-              title="Generate random PIN"
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              disabled={isSavingPasscode}
-              onClick={() => handleSavePasscode(passcode.trim())}
-              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Check className="w-3.5 h-3.5" />
-              <span>Save</span>
-            </button>
-            {passcode && (
-              <button
-                type="button"
-                disabled={isSavingPasscode}
-                onClick={() => handleSavePasscode(null)}
-                className="px-2.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white text-xs transition-colors"
-                title="Remove password"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          {passcodeFeedback && (
-            <p className="text-[11px] text-emerald-400 font-medium animate-in fade-in">
-              {passcodeFeedback}
-            </p>
-          )}
-        </div>
-
+        {/* Passcode Section */}
+        <HostPasscodeControl
+          passcode={passcode}
+          setPasscode={setPasscode}
+          onGeneratePasscode={handleGeneratePasscode}
+          onSavePasscode={handleSavePasscode}
+          isSavingPasscode={isSavingPasscode}
+          passcodeFeedback={passcodeFeedback}
+        />
 
         {/* In-Meeting Permission Toggles */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Meeting Rules & Privileges</h4>
-          <div className="space-y-2">
-            {SETTING_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const active = !!settings[item.key];
-              return (
-                <div
-                  key={item.key}
-                  className="flex items-center justify-between p-3.5 rounded-2xl bg-neutral-950/40 border border-white/5 hover:border-white/10 transition-colors"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-white/5 text-neutral-400 flex items-center justify-center shrink-0 mt-0.5">
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-white text-xs font-semibold block">{item.label}</span>
-                      <span className="text-neutral-400 text-[11px] leading-tight block">{item.desc}</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleToggleSetting(item.key)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                      active
-                        ? item.isDanger
-                          ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                          : "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                        : "bg-neutral-800 text-neutral-400 hover:text-white"
-                    }`}
-                  >
-                    {active ? (item.isDanger ? "Disabled" : "Active") : (item.isDanger ? "Allowed" : "Off")}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <HostRulesList settings={settings} onToggleSetting={handleToggleSetting} />
 
         {/* Danger Zone: End Meeting For All */}
         <div className="pt-3 border-t border-white/5 flex flex-col gap-2">

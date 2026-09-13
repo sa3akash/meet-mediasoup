@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { KeyRound, Plus, Trash2, BadgeCheck, Loader2 } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
 
@@ -22,11 +22,7 @@ export function PasskeysCard({ apiBase, getAuthHeaders }: PasskeysCardProps) {
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
 
-  useEffect(() => {
-    fetchPasskeys();
-  }, []);
-
-  const fetchPasskeys = async () => {
+  const fetchPasskeys = useCallback(async () => {
     try {
       const res = await fetch(`${apiBase}/api/auth/passkeys`, { headers: getAuthHeaders() });
       const data = await res.json();
@@ -36,7 +32,11 @@ export function PasskeysCard({ apiBase, getAuthHeaders }: PasskeysCardProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiBase, getAuthHeaders]);
+
+  useEffect(() => {
+    fetchPasskeys();
+  }, [fetchPasskeys]);
 
   const handleRegister = async () => {
     setRegistering(true);

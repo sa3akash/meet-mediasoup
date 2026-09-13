@@ -172,3 +172,26 @@
 .animate-ripple-2 {
   animation: ripplePulse 2s cubic-bezier(0, 0.2, 0.8, 1) infinite 0.7s;
 }
+
+@keyframes floatUp {
+  0% {
+    transform: translateY(0) scale(0.5);
+    opacity: 0;
+  }
+  15% {
+    transform: translateY(-20px) scale(1.15);
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-160px) scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-240px) scale(0.7);
+    opacity: 0;
+  }
+}
+
+.animate-float-up {
+  animation: floatUp 2.4s ease-out forwards;
+}

@@ -1075,6 +1075,28 @@ export async function handleSocketMessage(ws: ServerWebSocket<SocketData>, messa
         break;
       }
 
+      case "whiteboard:deleteElement": {
+        if (!ws.data.meetingId) {
+          sendError(ws, id, 400, "Missing meetingId");
+          break;
+        }
+
+        const { elementId } = data;
+        if (!elementId) {
+          sendError(ws, id, 400, "Missing elementId");
+          break;
+        }
+
+        const success = await whiteboardService.deleteObject(ws.data.meetingId, elementId);
+        broadcastToRoom(ws.data.meetingId, {
+          event: "whiteboard:elementDeleted",
+          data: { elementId, senderId: ws.data.participantId },
+        }, ws);
+
+        sendResponse(ws, id, { success, elementId });
+        break;
+      }
+
       case "whiteboard:clear": {
         if (!ws.data.meetingId) {
           sendError(ws, id, 400, "Missing meetingId");

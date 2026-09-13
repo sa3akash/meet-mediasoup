@@ -1,29 +1,18 @@
-import { cookies } from "next/headers";
+import { Metadata } from "next";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Video, Calendar as CalendarIcon, BarChart3, ShieldCheck } from "lucide-react";
 import { AdminConsole } from "../../../features/admin/admin-console";
 import { getAdminOverviewAction } from "../../../actions/admin.actions";
+import { DashboardNav } from "../../../components/common/dashboard-nav";
+import { getSessionUser } from "../../../lib/session";
 
-const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
-
-async function getSessionUser() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("accessToken")?.value;
-  if (!token) return null;
-
-  try {
-    const res = await fetch(`${API_BASE}/api/users/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.user || null;
-    }
-  } catch {}
-  return null;
-}
+export const metadata: Metadata = {
+  title: "Enterprise Admin Console | Google Meet SFU",
+  description: "Global management for users, meetings, recordings, storage, moderation reports, and audit logs.",
+  openGraph: {
+    title: "Enterprise Admin Console | Google Meet SFU",
+    description: "Global management for users, meetings, recordings, storage, moderation reports, and audit logs.",
+  },
+};
 
 export default async function AdminPage() {
   const user = await getSessionUser();
@@ -34,9 +23,9 @@ export default async function AdminPage() {
   const { stats } = await getAdminOverviewAction();
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-10 max-w-7xl mx-auto space-y-8">
+    <main className="min-h-screen bg-neutral-950 text-white p-6 md:p-10 max-w-7xl mx-auto space-y-8">
       {/* Dashboard Top Header & Global Nav Tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight text-white">Admin Console</h1>
@@ -49,41 +38,11 @@ export default async function AdminPage() {
           </p>
         </div>
 
-        {/* Global Nav Tabs */}
-        <div className="flex items-center gap-2 p-1 rounded-2xl bg-neutral-900 border border-white/5">
-          <Link
-            href="/meetings"
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
-          >
-            <Video className="w-3.5 h-3.5" />
-            <span>Meetings</span>
-          </Link>
-          <Link
-            href="/calendar"
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
-          >
-            <CalendarIcon className="w-3.5 h-3.5" />
-            <span>Calendar</span>
-          </Link>
-          <Link
-            href="/analytics"
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Analytics</span>
-          </Link>
-          <Link
-            href="/admin"
-            className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Admin</span>
-          </Link>
-        </div>
-      </div>
+        <DashboardNav currentSection="admin" />
+      </header>
 
       {/* Main Admin Console */}
       <AdminConsole initialOverview={stats} currentUserId={user.id} />
-    </div>
+    </main>
   );
 }

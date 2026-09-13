@@ -1,17 +1,21 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { Video, CalendarPlus, Calendar, BarChart3, ShieldCheck } from "lucide-react";
+import { Video, CalendarPlus } from "lucide-react";
 import { createInstantMeetingAction } from "../../../actions/meeting.actions";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { PersonalRoomCard } from "../../../features/meetings/personal-room-card";
-import { MeetingTemplateCard } from "../../../features/meetings/meeting-template-card";
-import { CreateTemplateModal } from "../../../features/meetings/create-template-modal";
 import { MeetingsList } from "../../../features/meetings/meetings-list";
+import { MeetingTemplatesSection } from "../../../features/meetings/components/meeting-templates-section";
+import { DashboardNav } from "../../../components/common/dashboard-nav";
+import { getSessionUser } from "../../../lib/session";
 
 export const metadata: Metadata = {
-  title: "Meetings & Schedules | Google Meet",
+  title: "Meetings & Schedules | Google Meet SFU",
   description: "Schedule, manage, and start instant video meetings and recurring sessions.",
+  openGraph: {
+    title: "Meetings & Schedules | Google Meet SFU",
+    description: "Schedule, manage, and start instant video meetings and recurring sessions.",
+  },
 };
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -66,59 +70,13 @@ async function getMeetingsData(userId: string) {
     return {
       meetings: [],
       personalRoom: { slug: "pmr-shakil" },
-      templates: [
-        {
-          id: "tpl-1",
-          name: "All-Hands Webinar",
-          description: "Mute on join, auto cloud recording enabled, chat restricted.",
-          isDefault: true,
-          settings: { waitingRoomEnabled: true, autoRecording: true, muteOnJoin: true, disableChat: false },
-        },
-        {
-          id: "tpl-2",
-          name: "Interactive Workshop",
-          description: "Open chat, reactions allowed, waiting room disabled for fast entry.",
-          isDefault: false,
-          settings: { waitingRoomEnabled: false, autoRecording: false, muteOnJoin: false, disableChat: false },
-        },
-        {
-          id: "tpl-3",
-          name: "Confidential Board Sync",
-          description: "Waiting room on, screen & file share restricted to host.",
-          isDefault: false,
-          settings: { waitingRoomEnabled: true, autoRecording: true, muteOnJoin: true, disableScreenShare: true, disableFileShare: true },
-        },
-        {
-          id: "tpl-4",
-          name: "Quick 1-on-1 Sync",
-          description: "Lightweight, open interaction for personal office hours.",
-          isDefault: false,
-          settings: { waitingRoomEnabled: false, autoRecording: false, muteOnJoin: false, disableChat: false },
-        },
-      ],
+      templates: [],
     };
   }
 }
 
 export default async function MeetingsPage() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("accessToken")?.value;
-  if (!token) {
-    redirect("/login");
-  }
-
-  let user: any = null;
-  try {
-    const userRes = await fetch(`${API_BASE}/api/users/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (userRes.ok) {
-      const data = await userRes.json();
-      user = data.user;
-    }
-  } catch {}
-
+  const user = await getSessionUser();
   if (!user) {
     redirect("/login");
   }
@@ -127,44 +85,14 @@ export default async function MeetingsPage() {
   const { meetings, personalRoom, templates } = await getMeetingsData(userId);
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-6 md:p-10 max-w-7xl mx-auto space-y-10">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5">
+    <main className="min-h-screen bg-neutral-950 text-white p-6 md:p-10 max-w-7xl mx-auto space-y-10">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-white/5">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">Meetings & Scheduling</h1>
           <p className="text-neutral-400 text-sm mt-1">Start instant rooms, schedule recurring events, or use reusable templates.</p>
         </div>
 
-        {/* Global Nav Tabs */}
-        <div className="flex items-center gap-2 p-1 rounded-2xl bg-neutral-900 border border-white/5">
-          <Link
-            href="/meetings"
-            className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 text-white shadow-md shadow-indigo-600/30 transition-all flex items-center gap-2"
-          >
-            <Video className="w-3.5 h-3.5" />
-            <span>Meetings</span>
-          </Link>
-          <Link
-            href="/calendar"
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Calendar</span>
-          </Link>
-          <Link
-            href="/analytics"
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>Analytics</span>
-          </Link>
-          <Link
-            href="/admin"
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-white/5 transition-all flex items-center gap-2"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Admin</span>
-          </Link>
-        </div>
+        <DashboardNav currentSection="meetings" />
 
         <div className="flex items-center gap-3">
           <form action={async () => {
@@ -188,36 +116,25 @@ export default async function MeetingsPage() {
             <span>Schedule Meeting</span>
           </Link>
         </div>
-      </div>
+      </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
           <PersonalRoomCard slug={personalRoom.slug} hostName={user.name} />
         </div>
 
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-white">Quick Start from Template</h2>
-              <span className="text-neutral-500 text-xs">{templates.length} templates available</span>
-            </div>
-            <CreateTemplateModal />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {templates.map((tpl: any) => (
-              <MeetingTemplateCard key={tpl.id} template={tpl} />
-            ))}
-          </div>
+        <div className="lg:col-span-2">
+          <MeetingTemplatesSection templates={templates} />
         </div>
       </div>
 
-      <div className="space-y-4 pt-4">
+      <section aria-labelledby="scheduled-heading" className="space-y-4 pt-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white">Upcoming & Scheduled Sessions</h2>
+          <h2 id="scheduled-heading" className="text-base font-semibold text-white">Upcoming & Scheduled Sessions</h2>
           <span className="text-neutral-500 text-xs">{meetings.length} meetings scheduled</span>
         </div>
         <MeetingsList meetings={meetings} />
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

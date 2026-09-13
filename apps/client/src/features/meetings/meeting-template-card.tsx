@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Sparkles, Video, Shield, MicOff, Disc, Check } from "lucide-react";
+import { Sparkles, Video, Shield, MicOff, Disc } from "lucide-react";
 import { instantiateTemplateAction } from "../../actions/template.actions";
 
 interface TemplateProps {
