@@ -1,12 +1,5 @@
 "use server";
 
-export {
-  getAdminMeetingsAction,
-  terminateMeetingAction,
-  getAdminRecordingsAction,
-  deleteAdminRecordingAction,
-  getAdminStorageAction,
-} from "./admin-meetings.actions";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 

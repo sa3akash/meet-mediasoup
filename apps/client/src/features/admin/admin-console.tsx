@@ -6,9 +6,11 @@ import {
   updateUserRoleAction,
   adminBanUserAction,
   deleteUserAction,
+} from "../../actions/admin.actions";
+import {
   terminateMeetingAction,
   deleteAdminRecordingAction,
-} from "../../actions/admin.actions";
+} from "../../actions/admin-meetings.actions";
 import { updateReportStatusAction } from "../../actions/moderation.actions";
 import type { AdminTab, AdminConsoleProps } from "./admin-types";
 import { fetchAdminTabData } from "./admin-fetch-service";

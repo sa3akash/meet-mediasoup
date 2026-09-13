@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { useMediaStore } from "../../stores/media-store";
-import { verifyMeetingAccessAction } from "../../actions/meeting.actions";
+import { verifyMeetingAccessAction } from "../../actions/meeting-access.actions";
 import { LobbyPreviewCard } from "./components/lobby-preview-card";
 import { LobbyStatusBarrier } from "./components/lobby-status-barrier";
 import { LobbyForm } from "./components/lobby-form";

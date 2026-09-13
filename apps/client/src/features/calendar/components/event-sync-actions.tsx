@@ -1,7 +1,7 @@
 "use client";
 
 import { Calendar as CalendarIcon, Download } from "lucide-react";
-import { CalendarEvent } from "./calendar-types";
+import { CalendarEvent } from "../calendar-types";
 
 interface EventSyncActionsProps {
   event: CalendarEvent;

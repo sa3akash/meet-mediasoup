@@ -1,5 +1,6 @@
 import { Sparkles, Plus, Keyboard, Shield, Zap, Globe } from "lucide-react";
-import { createInstantMeetingAction, joinMeetingByCodeAction } from "../../actions/meeting.actions";
+import { createInstantMeetingAction } from "../../actions/meeting.actions";
+import { joinMeetingByCodeAction } from "../../actions/meeting-access.actions";
 
 export function HomeHero() {
   return (

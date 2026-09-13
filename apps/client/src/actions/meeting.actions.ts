@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-export { verifyMeetingAccessAction, joinMeetingByCodeAction } from "./meeting-access.actions";
 
 const API_BASE = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 

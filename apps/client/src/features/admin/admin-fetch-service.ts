@@ -1,11 +1,13 @@
 import {
   getAdminOverviewAction,
   getAdminUsersAction,
+  getAdminAuditLogsAction,
+} from "../../actions/admin.actions";
+import {
   getAdminMeetingsAction,
   getAdminRecordingsAction,
   getAdminStorageAction,
-  getAdminAuditLogsAction,
-} from "../../actions/admin.actions";
+} from "../../actions/admin-meetings.actions";
 import { getReportsAction } from "../../actions/moderation.actions";
 import type { AdminTab } from "./admin-types";
 
